@@ -1,0 +1,24 @@
+<div class="layout">
+  <header class="top">
+    <a routerLink="/" class="brand">EN–UR Grammar</a>
+    @if (auth.user(); as u) {
+      <nav>
+        @if (isAuthor()) {
+          <a routerLink="/admin/sentences" routerLinkActive="active">Sentences</a>
+          <a routerLink="/admin/grades" routerLinkActive="active">Grades</a>
+          <a routerLink="/admin/rules" routerLinkActive="active">Rules</a>
+          <a routerLink="/admin/import" routerLinkActive="active">Import</a>
+        }
+      </nav>
+      <div class="session">
+        <span class="who">{{ u.displayName || u.email }} · {{ u.roles.join(', ') }}</span>
+        <button type="button" class="ghost" (click)="logout()">Sign out</button>
+      </div>
+    } @else {
+      <a routerLink="/login" class="login-link">Sign in</a>
+    }
+  </header>
+  <main class="main">
+    <router-outlet />
+  </main>
+</div>

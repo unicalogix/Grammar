@@ -1,0 +1,22 @@
+@host = http://127.0.0.1:5147
+
+### Anonymous health
+GET {{host}}/api/health
+
+### Login
+# @name login
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@enur.local",
+  "password": "ChangeMe!Admin123"
+}
+
+### Protected ping
+GET {{host}}/api/ping
+Authorization: Bearer {{login.response.body.$.accessToken}}
+
+### Current user
+GET {{host}}/api/auth/me
+Authorization: Bearer {{login.response.body.$.accessToken}}

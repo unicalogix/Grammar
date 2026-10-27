@@ -1,0 +1,3 @@
+namespace EnUrGrammar.Contracts.Auth;
+
+public sealed record LoginRequest(string Email, string Password);
