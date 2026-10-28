@@ -8,6 +8,8 @@ public static class DbSeeder
 {
     public const string DefaultAdminEmail = "admin@enur.local";
     public const string DefaultAdminPassword = "ChangeMe!Admin123";
+    public const string DefaultStudentEmail = "student@enur.local";
+    public const string DefaultStudentPassword = "ChangeMe!Student123";
 
     public static async Task SeedAsync(IServiceProvider services, ILogger logger)
     {
@@ -31,35 +33,10 @@ public static class DbSeeder
             }
         }
 
-        var admin = await userManager.FindByEmailAsync(DefaultAdminEmail);
-        if (admin is null)
-        {
-            admin = new ApplicationUser
-            {
-                UserName = DefaultAdminEmail,
-                Email = DefaultAdminEmail,
-                EmailConfirmed = true,
-                DisplayName = "Sample Admin",
-                IsActive = true,
-                CreatedAtUtc = DateTime.UtcNow
-            };
-
-            var create = await userManager.CreateAsync(admin, DefaultAdminPassword);
-            if (!create.Succeeded)
-            {
-                throw new InvalidOperationException(
-                    $"Failed to create admin user: {string.Join("; ", create.Errors.Select(e => e.Description))}");
-            }
-
-            var addRole = await userManager.AddToRoleAsync(admin, AppRoles.Admin);
-            if (!addRole.Succeeded)
-            {
-                throw new InvalidOperationException(
-                    $"Failed to assign Admin role: {string.Join("; ", addRole.Errors.Select(e => e.Description))}");
-            }
-
-            logger.LogInformation("Seeded admin user {Email}", DefaultAdminEmail);
-        }
+        var admin = await EnsureUserAsync(
+            userManager, logger, DefaultAdminEmail, DefaultAdminPassword, "Sample Admin", AppRoles.Admin);
+        await EnsureUserAsync(
+            userManager, logger, DefaultStudentEmail, DefaultStudentPassword, "Sample Student", AppRoles.Student);
 
         // Backfill Code on existing seed grade if missing (Phase 0 → Phase 1)
         var ungoded = await db.Grades.Where(g => g.NameEn == "Grade 5" && g.Code == null).ToListAsync();
@@ -73,9 +50,11 @@ public static class DbSeeder
             await db.SaveChangesAsync();
         }
 
+        Grade grade;
+        Rule rule;
         if (!await db.Grades.AnyAsync())
         {
-            var grade = new Grade
+            grade = new Grade
             {
                 NameEn = "Grade 5",
                 NameUr = "جماعت ۵",
@@ -87,7 +66,7 @@ public static class DbSeeder
             };
             db.Grades.Add(grade);
 
-            var rule = new Rule
+            rule = new Rule
             {
                 NameEn = "Past Simple",
                 NameUr = "ماضی مطلق",
@@ -105,5 +84,138 @@ public static class DbSeeder
             await db.SaveChangesAsync();
             logger.LogInformation("Seeded sample Grade 5 and PAST_SIMPLE rule");
         }
+        else
+        {
+            grade = await db.Grades.OrderBy(g => g.SortOrder).FirstAsync();
+            rule = await db.Rules.FirstOrDefaultAsync(r => r.Code == "PAST_SIMPLE")
+                   ?? await db.Rules.FirstAsync();
+        }
+
+        // Phase 2b: extra rules so “Which rules apply?” has distractors
+        await EnsureRuleLinkedAsync(db, logger, admin.Id, grade.Id,
+            "PRESENT_SIMPLE", "Present Simple", "حال مطلق",
+            "Used for habits and general truths.", "عادتوں اور عام سچائیوں کے لیے۔");
+        await EnsureRuleLinkedAsync(db, logger, admin.Id, grade.Id,
+            "FUTURE_SIMPLE", "Future Simple", "مستقبل مطلق",
+            "Used for actions that will happen later.", "آنے والے کاموں کے لیے۔");
+        await EnsureRuleLinkedAsync(db, logger, admin.Id, grade.Id,
+            "PRESENT_CONTINUOUS", "Present Continuous", "حال جاری",
+            "Used for actions happening now.", "ابھی ہو رہے کاموں کے لیے۔");
+
+        // Phase 2a: approved sample sentences so practice is non-empty out of the box
+        if (!await db.Sentences.AnyAsync(s => !s.IsDeleted && s.Status == SentenceStatus.Approved))
+        {
+            var samples = new (string En, string Ur)[]
+            {
+                ("She walked to school.", "وہ اسکول گئی۔"),
+                ("They played football yesterday.", "انہوں نے کل فٹ بال کھیلا۔"),
+                ("I finished my homework.", "میں نے اپنا ہوم ورک مکمل کیا۔"),
+                ("He opened the door.", "اس نے دروازہ کھولا۔"),
+                ("We visited the museum.", "ہم میوزیم گئے۔"),
+                ("The cat jumped on the table.", "بلی میز پر کودی۔")
+            };
+
+            foreach (var (en, ur) in samples)
+            {
+                var sentence = new Sentence
+                {
+                    TextEn = en,
+                    TextUr = ur,
+                    GradeId = grade.Id,
+                    Difficulty = Difficulty.Easy,
+                    Status = SentenceStatus.Approved,
+                    CreatedAtUtc = DateTime.UtcNow,
+                    ApprovedAtUtc = DateTime.UtcNow,
+                    CreatedByUserId = admin.Id,
+                    ApprovedByUserId = admin.Id
+                };
+                db.Sentences.Add(sentence);
+                await db.SaveChangesAsync();
+                db.SentenceRules.Add(new SentenceRule { SentenceId = sentence.Id, RuleId = rule.Id });
+            }
+            await db.SaveChangesAsync();
+            logger.LogInformation("Seeded {Count} approved sample sentences for practice", samples.Length);
+        }
+    }
+
+    private static async Task EnsureRuleLinkedAsync(
+        AppDbContext db,
+        ILogger logger,
+        string adminId,
+        int gradeId,
+        string code,
+        string nameEn,
+        string nameUr,
+        string explanationEn,
+        string explanationUr)
+    {
+        var existing = await db.Rules.FirstOrDefaultAsync(r => r.Code == code);
+        if (existing is null)
+        {
+            existing = new Rule
+            {
+                NameEn = nameEn,
+                NameUr = nameUr,
+                ExplanationEn = explanationEn,
+                ExplanationUr = explanationUr,
+                Code = code,
+                IsActive = true,
+                CreatedAtUtc = DateTime.UtcNow,
+                CreatedByUserId = adminId
+            };
+            db.Rules.Add(existing);
+            await db.SaveChangesAsync();
+            logger.LogInformation("Seeded rule {Code}", code);
+        }
+
+        if (!await db.GradeRules.AnyAsync(gr => gr.GradeId == gradeId && gr.RuleId == existing.Id))
+        {
+            db.GradeRules.Add(new GradeRule { GradeId = gradeId, RuleId = existing.Id });
+            await db.SaveChangesAsync();
+        }
+    }
+
+    private static async Task<ApplicationUser> EnsureUserAsync(
+        UserManager<ApplicationUser> userManager,
+        ILogger logger,
+        string email,
+        string password,
+        string displayName,
+        string role)
+    {
+        var user = await userManager.FindByEmailAsync(email);
+        if (user is null)
+        {
+            user = new ApplicationUser
+            {
+                UserName = email,
+                Email = email,
+                EmailConfirmed = true,
+                DisplayName = displayName,
+                IsActive = true,
+                CreatedAtUtc = DateTime.UtcNow
+            };
+
+            var create = await userManager.CreateAsync(user, password);
+            if (!create.Succeeded)
+            {
+                throw new InvalidOperationException(
+                    $"Failed to create user {email}: {string.Join("; ", create.Errors.Select(e => e.Description))}");
+            }
+
+            logger.LogInformation("Seeded user {Email}", email);
+        }
+
+        if (!await userManager.IsInRoleAsync(user, role))
+        {
+            var addRole = await userManager.AddToRoleAsync(user, role);
+            if (!addRole.Succeeded)
+            {
+                throw new InvalidOperationException(
+                    $"Failed to assign {role} to {email}: {string.Join("; ", addRole.Errors.Select(e => e.Description))}");
+            }
+        }
+
+        return user;
     }
 }

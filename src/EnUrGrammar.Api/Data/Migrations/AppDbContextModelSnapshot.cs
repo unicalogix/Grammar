@@ -99,6 +99,74 @@ namespace EnUrGrammar.Api.Data.Migrations
                     b.ToTable("AspNetUsers", (string)null);
                 });
 
+            modelBuilder.Entity("EnUrGrammar.Api.Domain.Attempt", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("AnsweredAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<byte>("ExerciseType")
+                        .HasColumnType("tinyint");
+
+                    b.Property<string>("ExpectedAnswer")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<bool>("IsCorrect")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("NormalizedExpected")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("NormalizedStudent")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<int>("PracticeSessionId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("PromptLanguage")
+                        .IsRequired()
+                        .HasMaxLength(2)
+                        .HasColumnType("nchar(2)")
+                        .IsFixedLength();
+
+                    b.Property<int>("SentenceId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("SequenceNo")
+                        .HasColumnType("int");
+
+                    b.Property<string>("StudentAnswer")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SentenceId");
+
+                    b.HasIndex("PracticeSessionId", "SequenceNo");
+
+                    b.HasIndex("UserId", "AnsweredAtUtc");
+
+                    b.ToTable("Attempts");
+                });
+
             modelBuilder.Entity("EnUrGrammar.Api.Domain.Grade", b =>
                 {
                     b.Property<int>("Id")
@@ -217,6 +285,50 @@ namespace EnUrGrammar.Api.Data.Migrations
                     b.HasIndex("UploadedByUserId", "CreatedAtUtc");
 
                     b.ToTable("ImportBatches");
+                });
+
+            modelBuilder.Entity("EnUrGrammar.Api.Domain.PracticeSession", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime?>("EndedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("FilterJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("ItemCount")
+                        .HasColumnType("int");
+
+                    b.Property<string>("SourceLanguage")
+                        .IsRequired()
+                        .HasMaxLength(2)
+                        .HasColumnType("nchar(2)")
+                        .IsFixedLength();
+
+                    b.Property<DateTime>("StartedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("TargetLanguage")
+                        .IsRequired()
+                        .HasMaxLength(2)
+                        .HasColumnType("nchar(2)")
+                        .IsFixedLength();
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "StartedAtUtc");
+
+                    b.ToTable("PracticeSessions");
                 });
 
             modelBuilder.Entity("EnUrGrammar.Api.Domain.Rule", b =>
@@ -484,6 +596,31 @@ namespace EnUrGrammar.Api.Data.Migrations
                     b.ToTable("AspNetUserTokens", (string)null);
                 });
 
+            modelBuilder.Entity("EnUrGrammar.Api.Domain.Attempt", b =>
+                {
+                    b.HasOne("EnUrGrammar.Api.Domain.PracticeSession", "PracticeSession")
+                        .WithMany("Attempts")
+                        .HasForeignKey("PracticeSessionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("EnUrGrammar.Api.Domain.Sentence", "Sentence")
+                        .WithMany()
+                        .HasForeignKey("SentenceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("EnUrGrammar.Api.Domain.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("PracticeSession");
+
+                    b.Navigation("Sentence");
+                });
+
             modelBuilder.Entity("EnUrGrammar.Api.Domain.GradeRule", b =>
                 {
                     b.HasOne("EnUrGrammar.Api.Domain.Grade", "Grade")
@@ -501,6 +638,15 @@ namespace EnUrGrammar.Api.Data.Migrations
                     b.Navigation("Grade");
 
                     b.Navigation("Rule");
+                });
+
+            modelBuilder.Entity("EnUrGrammar.Api.Domain.PracticeSession", b =>
+                {
+                    b.HasOne("EnUrGrammar.Api.Domain.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("EnUrGrammar.Api.Domain.Sentence", b =>
@@ -589,6 +735,11 @@ namespace EnUrGrammar.Api.Data.Migrations
                     b.Navigation("GradeRules");
 
                     b.Navigation("Sentences");
+                });
+
+            modelBuilder.Entity("EnUrGrammar.Api.Domain.PracticeSession", b =>
+                {
+                    b.Navigation("Attempts");
                 });
 
             modelBuilder.Entity("EnUrGrammar.Api.Domain.Rule", b =>
