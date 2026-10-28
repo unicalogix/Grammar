@@ -11,12 +11,31 @@ public class PracticeService
     public const int DefaultItemCount = 8;
     public const int MaxItemCount = 20;
     public const int McqOptionCount = 4;
+    public const int FillBlankOptionCount = 4;
+    public const int RulesApplyOptionCount = 4;
 
     private static readonly JsonSerializerOptions JsonOpts = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         WriteIndented = false
     };
+
+    private static readonly HashSet<string> EnglishStops = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "a", "an", "the", "to", "of", "in", "on", "at", "for", "and", "or", "but",
+        "is", "are", "was", "were", "be", "am", "i", "he", "she", "we", "they", "it",
+        "my", "his", "her", "our", "their", "this", "that"
+    };
+
+    private static readonly ExerciseType[] ExerciseCycle =
+    [
+        ExerciseType.MultiChoice,
+        ExerciseType.Arrange,
+        ExerciseType.FreeType,
+        ExerciseType.FillBlank,
+        ExerciseType.ArrangeDistractors,
+        ExerciseType.RulesApply
+    ];
 
     private readonly AppDbContext _db;
 
@@ -92,8 +111,25 @@ public class PracticeService
 
         var rng = Random.Shared;
         var picked = pool.OrderBy(_ => rng.Next()).Take(itemCount).ToList();
-        var exerciseCycle = new[] { ExerciseType.MultiChoice, ExerciseType.Arrange, ExerciseType.FreeType };
-        var planItems = picked.Select((s, i) => new PlanItem(s.Id, exerciseCycle[i % exerciseCycle.Length])).ToList();
+        var planItems = new List<PlanItem>(picked.Count);
+        for (var i = 0; i < picked.Count; i++)
+        {
+            var s = picked[i];
+            var type = ExerciseCycle[i % ExerciseCycle.Length];
+            string? blankWord = null;
+
+            if (type == ExerciseType.FillBlank)
+            {
+                var targetText = target == "en" ? s.TextEn : s.TextUr;
+                var blank = MakeBlank(targetText, target);
+                if (blank is null)
+                    type = ExerciseType.FreeType;
+                else
+                    blankWord = blank.Value.BlankWord;
+            }
+
+            planItems.Add(new PlanItem(s.Id, type, blankWord));
+        }
 
         var plan = new SessionPlan(
             gradeIds, ruleIds, req.Difficulty, source, target,
@@ -144,14 +180,49 @@ public class PracticeService
             return (null, "ExerciseType does not match the current item.");
 
         var sentence = await _db.Sentences.AsNoTracking()
+            .Include(s => s.SentenceRules).ThenInclude(sr => sr.Rule)
             .FirstOrDefaultAsync(s => s.Id == planItem.SentenceId && !s.IsDeleted, ct);
         if (sentence is null)
             return (null, "Sentence not found.");
 
-        var expected = plan.TargetLanguage == "en" ? sentence.TextEn : sentence.TextUr;
+        var expectedFull = plan.TargetLanguage == "en" ? sentence.TextEn : sentence.TextUr;
         var studentRaw = req.StudentAnswer ?? string.Empty;
-        var (isCorrect, normExpected, normStudent, studentStored) =
-            Score(planItem.ExerciseType, expected, studentRaw, plan.TargetLanguage);
+
+        string expectedStored;
+        bool isCorrect;
+        string normExpected;
+        string normStudent;
+        string studentStored;
+
+        if (planItem.ExerciseType == ExerciseType.RulesApply)
+        {
+            var correctIds = sentence.SentenceRules.Select(sr => sr.RuleId).OrderBy(id => id).ToList();
+            var studentIds = ParseIdList(studentRaw);
+            isCorrect = correctIds.Count > 0
+                        && correctIds.Count == studentIds.Count
+                        && correctIds.SequenceEqual(studentIds);
+            expectedStored = FormatRuleLabels(
+                sentence.SentenceRules
+                    .Where(sr => sr.Rule is not null)
+                    .Select(sr => sr.Rule!)
+                    .ToList());
+            studentStored = Truncate(studentRaw.Trim(), 500);
+            normExpected = string.Join(',', correctIds);
+            normStudent = string.Join(',', studentIds);
+        }
+        else if (planItem.ExerciseType == ExerciseType.FillBlank)
+        {
+            var blank = planItem.BlankWord ?? string.Empty;
+            expectedStored = expectedFull;
+            (isCorrect, normExpected, normStudent, studentStored) =
+                ScoreFillBlank(blank, studentRaw, plan.TargetLanguage);
+        }
+        else
+        {
+            expectedStored = expectedFull;
+            (isCorrect, normExpected, normStudent, studentStored) =
+                Score(planItem.ExerciseType, expectedFull, studentRaw, plan.TargetLanguage);
+        }
 
         var attempt = new Attempt
         {
@@ -160,7 +231,7 @@ public class PracticeService
             SentenceId = sentence.Id,
             ExerciseType = planItem.ExerciseType,
             PromptLanguage = plan.SourceLanguage,
-            ExpectedAnswer = expected,
+            ExpectedAnswer = Truncate(expectedStored, 500),
             StudentAnswer = Truncate(studentStored, 500),
             NormalizedExpected = Truncate(normExpected, 500),
             NormalizedStudent = Truncate(normStudent, 500),
@@ -184,7 +255,7 @@ public class PracticeService
         }
 
         return (new AttemptResultDto(
-            attempt.Id, attempt.SequenceNo, isCorrect, expected, attempt.StudentAnswer, next, complete), null);
+            attempt.Id, attempt.SequenceNo, isCorrect, expectedStored, attempt.StudentAnswer, next, complete), null);
     }
 
     public async Task<(PracticeSessionDto? dto, string? error)> CompleteAsync(
@@ -206,6 +277,7 @@ public class PracticeService
     {
         var planItem = plan.Items[sequenceNo - 1];
         var sentence = await _db.Sentences.AsNoTracking()
+            .Include(s => s.SentenceRules)
             .FirstAsync(s => s.Id == planItem.SentenceId, ct);
 
         var prompt = plan.SourceLanguage == "en" ? sentence.TextEn : sentence.TextUr;
@@ -213,6 +285,8 @@ public class PracticeService
 
         IReadOnlyList<string>? options = null;
         IReadOnlyList<string>? tokens = null;
+        string? blankedText = null;
+        IReadOnlyList<int>? optionIds = null;
 
         switch (planItem.ExerciseType)
         {
@@ -224,6 +298,23 @@ public class PracticeService
                 break;
             case ExerciseType.FreeType:
                 break;
+            case ExerciseType.FillBlank:
+            {
+                var blankWord = planItem.BlankWord ?? string.Empty;
+                blankedText = ApplyBlank(expected, blankWord);
+                options = await BuildFillBlankOptionsAsync(blankWord, sentence.Id, plan.TargetLanguage, ct);
+                break;
+            }
+            case ExerciseType.ArrangeDistractors:
+                tokens = await BuildArrangeWithDistractorsAsync(expected, sentence.Id, plan.TargetLanguage, ct);
+                break;
+            case ExerciseType.RulesApply:
+            {
+                var built = await BuildRulesApplyOptionsAsync(sentence, ct);
+                options = built.Labels;
+                optionIds = built.Ids;
+                break;
+            }
         }
 
         return new PracticeItemDto(
@@ -233,7 +324,9 @@ public class PracticeService
             plan.SourceLanguage,
             prompt,
             options,
-            tokens);
+            tokens,
+            blankedText,
+            optionIds);
     }
 
     private async Task<IReadOnlyList<string>> BuildMcqOptionsAsync(
@@ -254,7 +347,6 @@ public class PracticeService
             .Take(McqOptionCount - 1)
             .ToList();
 
-        // Pad with mild variants if pool is thin
         while (unique.Count < McqOptionCount - 1)
         {
             unique.Add($"{correct} ({unique.Count + 1})");
@@ -264,11 +356,109 @@ public class PracticeService
         return options;
     }
 
+    private async Task<IReadOnlyList<string>> BuildFillBlankOptionsAsync(
+        string blankWord, int sentenceId, string targetLang, CancellationToken ct)
+    {
+        var distractorQuery = _db.Sentences.AsNoTracking()
+            .Where(s => !s.IsDeleted && s.Status == SentenceStatus.Approved && s.Id != sentenceId);
+
+        var texts = targetLang == "en"
+            ? await distractorQuery.Select(s => s.TextEn).Take(80).ToListAsync(ct)
+            : await distractorQuery.Select(s => s.TextUr).Take(80).ToListAsync(ct);
+
+        var blankNorm = AnswerNormalization.Normalize(blankWord, targetLang);
+        var wordPool = texts
+            .SelectMany(AnswerNormalization.Tokenize)
+            .Select(StripTokenPunct)
+            .Where(w => w.Length >= 2
+                        && !string.Equals(
+                            AnswerNormalization.Normalize(w, targetLang),
+                            blankNorm,
+                            StringComparison.Ordinal))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(_ => Random.Shared.Next())
+            .Take(FillBlankOptionCount - 1)
+            .ToList();
+
+        while (wordPool.Count < FillBlankOptionCount - 1)
+            wordPool.Add($"…{wordPool.Count + 1}");
+
+        return wordPool.Append(StripTokenPunct(blankWord))
+            .OrderBy(_ => Random.Shared.Next())
+            .ToList();
+    }
+
+    private async Task<IReadOnlyList<string>> BuildArrangeWithDistractorsAsync(
+        string expected, int sentenceId, string targetLang, CancellationToken ct)
+    {
+        var correct = AnswerNormalization.Tokenize(expected).ToList();
+        var distractorCount = correct.Count >= 4 ? 2 : 1;
+
+        var distractorQuery = _db.Sentences.AsNoTracking()
+            .Where(s => !s.IsDeleted && s.Status == SentenceStatus.Approved && s.Id != sentenceId);
+
+        var texts = targetLang == "en"
+            ? await distractorQuery.Select(s => s.TextEn).Take(80).ToListAsync(ct)
+            : await distractorQuery.Select(s => s.TextUr).Take(80).ToListAsync(ct);
+
+        var correctSet = new HashSet<string>(correct, StringComparer.OrdinalIgnoreCase);
+        var extras = texts
+            .SelectMany(AnswerNormalization.Tokenize)
+            .Where(w => w.Length >= 2 && !correctSet.Contains(w))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(_ => Random.Shared.Next())
+            .Take(distractorCount)
+            .ToList();
+
+        // Guarantee 1–2 distractors even on thin pools
+        var n = 1;
+        while (extras.Count < distractorCount)
+        {
+            var pad = targetLang == "en" ? $"extra{n}" : $"اضافی{n}";
+            if (!correctSet.Contains(pad) && extras.All(e => !string.Equals(e, pad, StringComparison.OrdinalIgnoreCase)))
+                extras.Add(pad);
+            n++;
+        }
+
+        return ShuffleTokens(correct.Concat(extras).ToList());
+    }
+
+    private async Task<(IReadOnlyList<string> Labels, IReadOnlyList<int> Ids)> BuildRulesApplyOptionsAsync(
+        Sentence sentence, CancellationToken ct)
+    {
+        var correctIds = sentence.SentenceRules.Select(sr => sr.RuleId).ToHashSet();
+        var correctRules = await _db.Rules.AsNoTracking()
+            .Where(r => r.IsActive && correctIds.Contains(r.Id))
+            .ToListAsync(ct);
+
+        var needDistractors = Math.Max(1, RulesApplyOptionCount - Math.Max(1, correctRules.Count));
+        var distractorPool = await _db.Rules.AsNoTracking()
+            .Where(r => r.IsActive && !correctIds.Contains(r.Id))
+            .ToListAsync(ct);
+        var distractors = distractorPool
+            .OrderBy(_ => Random.Shared.Next())
+            .Take(needDistractors)
+            .ToList();
+
+        // If catalog is thin, still show correct rules alone
+        var combined = correctRules.Concat(distractors)
+            .OrderBy(_ => Random.Shared.Next())
+            .ToList();
+
+        if (combined.Count == 0)
+        {
+            return (["(no rules linked)"], [0]);
+        }
+
+        var labels = combined.Select(FormatRuleLabel).ToList();
+        var ids = combined.Select(r => r.Id).ToList();
+        return (labels, ids);
+    }
+
     private static IReadOnlyList<string> ShuffleTokens(IReadOnlyList<string> tokens)
     {
         var list = tokens.ToList();
         if (list.Count <= 1) return list;
-        // Ensure not already correct order when possible
         for (var attempt = 0; attempt < 8; attempt++)
         {
             var shuffled = list.OrderBy(_ => Random.Shared.Next()).ToList();
@@ -278,12 +468,77 @@ public class PracticeService
         return list.OrderBy(_ => Random.Shared.Next()).ToList();
     }
 
+    private static (string BlankWord, string BlankedText)? MakeBlank(string text, string language)
+    {
+        var tokens = AnswerNormalization.Tokenize(text);
+        if (tokens.Count < 2) return null;
+
+        var candidates = new List<(string Word, int Index)>();
+        for (var i = 0; i < tokens.Count; i++)
+        {
+            var raw = tokens[i];
+            var word = StripTokenPunct(raw);
+            if (word.Length < 2) continue;
+            if (language is "en" && EnglishStops.Contains(word)) continue;
+            candidates.Add((word, i));
+        }
+
+        if (candidates.Count == 0)
+        {
+            // Prefer a middle token over the first
+            for (var i = 1; i < tokens.Count; i++)
+            {
+                var word = StripTokenPunct(tokens[i]);
+                if (word.Length >= 1)
+                    candidates.Add((word, i));
+            }
+        }
+
+        if (candidates.Count == 0) return null;
+
+        var pick = candidates[Random.Shared.Next(candidates.Count)];
+        var blanked = tokens.ToList();
+        blanked[pick.Index] = "____";
+        return (pick.Word, string.Join(' ', blanked));
+    }
+
+    private static string ApplyBlank(string text, string blankWord)
+    {
+        var tokens = AnswerNormalization.Tokenize(text).ToList();
+        var blankNorm = AnswerNormalization.Normalize(blankWord, "en"); // case-fold for EN; UR normalize separately below
+        for (var i = 0; i < tokens.Count; i++)
+        {
+            var stripped = StripTokenPunct(tokens[i]);
+            if (string.Equals(stripped, blankWord, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(AnswerNormalization.Normalize(stripped, "ur"),
+                    AnswerNormalization.Normalize(blankWord, "ur"), StringComparison.Ordinal)
+                || string.Equals(AnswerNormalization.Normalize(stripped, "en"), blankNorm, StringComparison.Ordinal))
+            {
+                tokens[i] = "____";
+                return string.Join(' ', tokens);
+            }
+        }
+
+        // Fallback: blank a middle token
+        if (tokens.Count >= 2)
+        {
+            tokens[tokens.Count / 2] = "____";
+            return string.Join(' ', tokens);
+        }
+
+        return "____";
+    }
+
+    private static string StripTokenPunct(string token) =>
+        token.Trim().TrimEnd('.', '?', '!', '؟', '۔', '…', ',', ';', ':').Trim();
+
     private static (bool isCorrect, string normExpected, string normStudent, string studentStored)
         Score(ExerciseType type, string expected, string studentRaw, string targetLang)
     {
         switch (type)
         {
             case ExerciseType.Arrange:
+            case ExerciseType.ArrangeDistractors:
             {
                 var expectedTokens = AnswerNormalization.Tokenize(expected);
                 var studentTokens = AnswerNormalization.Tokenize(studentRaw);
@@ -301,6 +556,32 @@ public class PracticeService
             }
         }
     }
+
+    private static (bool isCorrect, string normExpected, string normStudent, string studentStored)
+        ScoreFillBlank(string blankWord, string studentRaw, string targetLang)
+    {
+        var ne = AnswerNormalization.Normalize(StripTokenPunct(blankWord), targetLang);
+        var ns = AnswerNormalization.Normalize(StripTokenPunct(studentRaw), targetLang);
+        return (string.Equals(ne, ns, StringComparison.Ordinal), ne, ns, studentRaw.Trim());
+    }
+
+    private static List<int> ParseIdList(string raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return [];
+        return raw.Split([',', ';', ' ', '|'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(p => int.TryParse(p, out var id) ? id : (int?)null)
+            .Where(id => id is > 0)
+            .Select(id => id!.Value)
+            .Distinct()
+            .OrderBy(id => id)
+            .ToList();
+    }
+
+    private static string FormatRuleLabel(Rule r) =>
+        string.IsNullOrWhiteSpace(r.NameUr) ? r.NameEn : $"{r.NameEn} / {r.NameUr}";
+
+    private static string FormatRuleLabels(IReadOnlyList<Rule> rules) =>
+        string.Join("; ", rules.OrderBy(r => r.NameEn).Select(FormatRuleLabel));
 
     private static string? NormalizeLang(string? raw)
     {
@@ -331,5 +612,8 @@ public class PracticeService
         string TargetLanguage,
         List<PlanItem> Items);
 
-    private sealed record PlanItem(int SentenceId, ExerciseType ExerciseType);
+    private sealed record PlanItem(
+        int SentenceId,
+        ExerciseType ExerciseType,
+        string? BlankWord = null);
 }

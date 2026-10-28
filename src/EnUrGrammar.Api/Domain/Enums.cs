@@ -32,5 +32,8 @@ public enum ExerciseType : byte
 {
     MultiChoice = 1,
     Arrange = 2,
-    FreeType = 3
+    FreeType = 3,
+    FillBlank = 4,
+    ArrangeDistractors = 5,
+    RulesApply = 6
 }

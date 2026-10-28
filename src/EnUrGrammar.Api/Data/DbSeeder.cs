@@ -91,6 +91,17 @@ public static class DbSeeder
                    ?? await db.Rules.FirstAsync();
         }
 
+        // Phase 2b: extra rules so “Which rules apply?” has distractors
+        await EnsureRuleLinkedAsync(db, logger, admin.Id, grade.Id,
+            "PRESENT_SIMPLE", "Present Simple", "حال مطلق",
+            "Used for habits and general truths.", "عادتوں اور عام سچائیوں کے لیے۔");
+        await EnsureRuleLinkedAsync(db, logger, admin.Id, grade.Id,
+            "FUTURE_SIMPLE", "Future Simple", "مستقبل مطلق",
+            "Used for actions that will happen later.", "آنے والے کاموں کے لیے۔");
+        await EnsureRuleLinkedAsync(db, logger, admin.Id, grade.Id,
+            "PRESENT_CONTINUOUS", "Present Continuous", "حال جاری",
+            "Used for actions happening now.", "ابھی ہو رہے کاموں کے لیے۔");
+
         // Phase 2a: approved sample sentences so practice is non-empty out of the box
         if (!await db.Sentences.AnyAsync(s => !s.IsDeleted && s.Status == SentenceStatus.Approved))
         {
@@ -124,6 +135,43 @@ public static class DbSeeder
             }
             await db.SaveChangesAsync();
             logger.LogInformation("Seeded {Count} approved sample sentences for practice", samples.Length);
+        }
+    }
+
+    private static async Task EnsureRuleLinkedAsync(
+        AppDbContext db,
+        ILogger logger,
+        string adminId,
+        int gradeId,
+        string code,
+        string nameEn,
+        string nameUr,
+        string explanationEn,
+        string explanationUr)
+    {
+        var existing = await db.Rules.FirstOrDefaultAsync(r => r.Code == code);
+        if (existing is null)
+        {
+            existing = new Rule
+            {
+                NameEn = nameEn,
+                NameUr = nameUr,
+                ExplanationEn = explanationEn,
+                ExplanationUr = explanationUr,
+                Code = code,
+                IsActive = true,
+                CreatedAtUtc = DateTime.UtcNow,
+                CreatedByUserId = adminId
+            };
+            db.Rules.Add(existing);
+            await db.SaveChangesAsync();
+            logger.LogInformation("Seeded rule {Code}", code);
+        }
+
+        if (!await db.GradeRules.AnyAsync(gr => gr.GradeId == gradeId && gr.RuleId == existing.Id))
+        {
+            db.GradeRules.Add(new GradeRule { GradeId = gradeId, RuleId = existing.Id });
+            await db.SaveChangesAsync();
         }
     }
 

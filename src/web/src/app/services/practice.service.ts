@@ -26,14 +26,17 @@ export interface PracticeCatalog {
   rules: PracticeRuleOption[];
 }
 
+/** 1 MCQ, 2 Arrange, 3 FreeType, 4 FillBlank, 5 ArrangeDistractors, 6 RulesApply */
 export interface PracticeItem {
   sequenceNo: number;
   sentenceId: number;
-  exerciseType: number; // 1 MCQ, 2 Arrange, 3 FreeType
+  exerciseType: number;
   promptLanguage: string;
   promptText: string;
   options: string[] | null;
   tokens: string[] | null;
+  blankedText: string | null;
+  optionIds: number[] | null;
 }
 
 export interface PracticeSession {

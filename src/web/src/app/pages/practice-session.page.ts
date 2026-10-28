@@ -43,9 +43,15 @@ import { AttemptResult, PracticeItem, PracticeService, PracticeSession } from '.
             </div>
           }
 
-          @if (item()!.exerciseType === 2) {
+          @if (item()!.exerciseType === 2 || item()!.exerciseType === 5) {
             <div class="arrange">
-              <p class="hint">Tap words in the correct order</p>
+              <p class="hint">
+                @if (item()!.exerciseType === 5) {
+                  Tap words in the correct order — leave out the extra word(s)
+                } @else {
+                  Tap words in the correct order
+                }
+              </p>
               <div class="picked">
                 @for (w of arranged(); track $index) {
                   <button type="button" class="token on" (click)="unpick($index)" [disabled]="busy()">{{ w }}</button>
@@ -60,7 +66,7 @@ import { AttemptResult, PracticeItem, PracticeService, PracticeSession } from '.
                 type="button"
                 class="submit"
                 (click)="submitArrange()"
-                [disabled]="busy() || remaining().length > 0"
+                [disabled]="busy() || !canSubmitArrange()"
               >
                 Check answer
               </button>
@@ -98,16 +104,69 @@ import { AttemptResult, PracticeItem, PracticeService, PracticeSession } from '.
               </button>
             </div>
           }
+
+          @if (item()!.exerciseType === 4) {
+            <div class="fillblank">
+              @if (item()!.blankedText) {
+                <p
+                  class="blanked"
+                  [attr.lang]="answerLang()"
+                  [attr.dir]="answerDir()"
+                  [class.rtl]="isUrduAnswer()"
+                  [class.ltr]="!isUrduAnswer()"
+                >
+                  {{ item()!.blankedText }}
+                </p>
+              }
+              <p class="hint">Choose the missing word</p>
+              @if (item()!.options) {
+                <div class="options" role="listbox">
+                  @for (opt of item()!.options!; track opt) {
+                    <button type="button" class="opt" (click)="selectFillBlank(opt)" [disabled]="busy()">
+                      {{ opt }}
+                    </button>
+                  }
+                </div>
+              }
+            </div>
+          }
+
+          @if (item()!.exerciseType === 6 && item()!.options && item()!.optionIds) {
+            <div class="rules">
+              <p class="hint">Which rules apply to this sentence? Select all that fit.</p>
+              <div class="rule-list">
+                @for (opt of item()!.options!; track $index) {
+                  <label class="rule-opt">
+                    <input
+                      type="checkbox"
+                      [checked]="selectedRuleIds().has(item()!.optionIds![$index])"
+                      (change)="toggleRule(item()!.optionIds![$index])"
+                      [disabled]="busy()"
+                    />
+                    <span>{{ opt }}</span>
+                  </label>
+                }
+              </div>
+              <button
+                type="button"
+                class="submit"
+                (click)="submitRules()"
+                [disabled]="busy() || selectedRuleIds().size === 0"
+              >
+                Check answer
+              </button>
+            </div>
+          }
         } @else {
           <div class="feedback" [class.ok]="feedback()!.isCorrect" [class.bad]="!feedback()!.isCorrect">
             <p class="verdict">{{ feedback()!.isCorrect ? 'Correct' : 'Not quite' }}</p>
             <p class="answer-label">Correct answer</p>
             <p
               class="answer"
-              [attr.lang]="answerLang()"
-              [attr.dir]="answerDir()"
-              [class.rtl]="isUrduAnswer()"
-              [class.ltr]="!isUrduAnswer()"
+              [attr.lang]="feedbackAnswerLang()"
+              [attr.dir]="feedbackAnswerDir()"
+              [class.rtl]="feedbackAnswerLang() === 'ur'"
+              [class.ltr]="feedbackAnswerLang() !== 'ur'"
             >
               {{ feedback()!.expectedAnswer }}
             </p>
@@ -148,13 +207,28 @@ import { AttemptResult, PracticeItem, PracticeService, PracticeSession } from '.
     .opt { width: 100%; }
     .opt:hover, .token:hover { border-color: var(--accent); }
     .token.on { background: rgba(31, 107, 74, 0.14); border-color: var(--accent); }
-    .arrange { display: grid; gap: .85rem; }
+    .arrange, .fillblank, .rules { display: grid; gap: .85rem; }
     .picked {
       min-height: 3.5rem; padding: .55rem;
       border: 1px dashed var(--line); border-radius: .55rem;
       background: rgba(255,255,255,.4);
     }
     .hint, .muted { color: var(--muted); margin: 0; }
+    .blanked {
+      margin: 0; font-size: 1.25rem; font-weight: 650; line-height: 1.45;
+      padding: .85rem 1rem; border-radius: .55rem;
+      background: rgba(255,255,255,.55); border: 1px solid var(--line);
+    }
+    .blanked.rtl { direction: rtl; text-align: right; }
+    .blanked.ltr { direction: ltr; text-align: left; }
+    .rule-list { display: grid; gap: .55rem; }
+    .rule-opt {
+      display: flex; align-items: flex-start; gap: .65rem;
+      min-height: 3rem; padding: .7rem .9rem;
+      border: 1px solid var(--line); border-radius: .55rem;
+      background: rgba(255,255,255,.8); cursor: pointer; font-weight: 600;
+    }
+    .rule-opt input { width: 1.15rem; height: 1.15rem; margin-top: .15rem; accent-color: var(--accent); flex-shrink: 0; }
     .freetype { display: grid; gap: .75rem; }
     .freetype label { display: grid; gap: .35rem; font-size: .85rem; color: var(--muted); font-weight: 600; }
     textarea {
@@ -211,6 +285,7 @@ export class PracticeSessionPage implements OnInit {
 
   readonly arranged = signal<string[]>([]);
   readonly remaining = signal<string[]>([]);
+  readonly selectedRuleIds = signal<Set<number>>(new Set());
   freeAnswer = '';
   private sessionId = 0;
 
@@ -241,10 +316,18 @@ export class PracticeSessionPage implements OnInit {
   }
 
   exerciseLabel(type: number): string {
-    return type === 1 ? 'Multiple choice' : type === 2 ? 'Arrange words' : 'Type the answer';
+    switch (type) {
+      case 1: return 'Multiple choice';
+      case 2: return 'Arrange words';
+      case 3: return 'Type the answer';
+      case 4: return 'Fill in the blank';
+      case 5: return 'Arrange (extra words)';
+      case 6: return 'Which rules apply?';
+      default: return 'Exercise';
+    }
   }
 
-  /** Free-type / revealed answer language matches session target (Urdu or English). */
+  /** Free-type / blank / revealed answer language matches session target (Urdu or English). */
   isUrduAnswer(): boolean {
     return this.session()?.targetLanguage === 'ur';
   }
@@ -257,7 +340,20 @@ export class PracticeSessionPage implements OnInit {
     return this.isUrduAnswer() ? 'rtl' : 'ltr';
   }
 
+  /** Rules-apply feedback is bilingual labels — keep LTR. */
+  feedbackAnswerLang(): 'ur' | 'en' {
+    return this.item()?.exerciseType === 6 ? 'en' : this.answerLang();
+  }
+
+  feedbackAnswerDir(): 'rtl' | 'ltr' {
+    return this.feedbackAnswerLang() === 'ur' ? 'rtl' : 'ltr';
+  }
+
   selectMcq(opt: string): void {
+    this.submit(opt);
+  }
+
+  selectFillBlank(opt: string): void {
     this.submit(opt);
   }
 
@@ -275,12 +371,32 @@ export class PracticeSessionPage implements OnInit {
     this.remaining.set([...this.remaining(), word]);
   }
 
+  canSubmitArrange(): boolean {
+    const it = this.item();
+    if (!it || this.arranged().length === 0) return false;
+    // Classic arrange: must use every token. Distractors: may leave extras unused.
+    if (it.exerciseType === 5) return true;
+    return this.remaining().length === 0;
+  }
+
   submitArrange(): void {
     this.submit(this.arranged().join(' '));
   }
 
   submitFree(): void {
     this.submit(this.freeAnswer.trim());
+  }
+
+  toggleRule(id: number): void {
+    const next = new Set(this.selectedRuleIds());
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    this.selectedRuleIds.set(next);
+  }
+
+  submitRules(): void {
+    const ids = [...this.selectedRuleIds()].sort((a, b) => a - b);
+    this.submit(ids.join(','));
   }
 
   continueAfterFeedback(): void {
@@ -309,6 +425,7 @@ export class PracticeSessionPage implements OnInit {
     this.freeAnswer = '';
     this.arranged.set([]);
     this.remaining.set(it?.tokens ? [...it.tokens] : []);
+    this.selectedRuleIds.set(new Set());
   }
 
   private submit(answer: string): void {

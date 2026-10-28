@@ -4,7 +4,7 @@ English–Urdu grammar practice for school kids and self-learners. Teachers auth
 
 **Stack:** Angular 19 · ASP.NET Core 8 Web API · SQL Server · EF Core · JWT identity
 
-This repo ships **Phase 0–2a**: foundations, content/admin (CRUD + CSV/Excel import + MT stub), and **student practice** (MCQ, arrange words, free-type with normalization).
+This repo ships **Phase 0–2b**: foundations, content/admin (CRUD + CSV/Excel import + MT stub), and **student practice** (MCQ, arrange, free-type, fill-in-the-blank, arrange with distractors, “which rules apply?”).
 
 ---
 
@@ -111,16 +111,22 @@ npm start
 
 Open [http://127.0.0.1:4317](http://127.0.0.1:4317). Dev traffic to `/api` is proxied to the API on port `5147`.
 
-### Try student practice (Phase 2a)
+### Try student practice (Phase 2a + 2b)
 
 1. Sign in as **student@enur.local** / `ChangeMe!Student123` (or admin/teacher to preview)
 2. Open **Practice** (home)
 3. Select grade(s), optional rules, difficulty, prompt language (EN or UR)
-4. **Start practice** — cycle through Multi-choice, Arrange words, and Free type
+4. **Start practice** — items cycle through:
+   - Multi-choice
+   - Arrange words
+   - Free type
+   - Fill in the blank (word bank)
+   - Arrange with 1–2 distractor words (leave extras unused)
+   - Which rules apply? (multi-select)
 5. After each attempt, see correct/incorrect and the correct answer
 6. Sessions and attempts are stored for later progress (Phase 4)
 
-**Urdu free-type answers:** when the session target is Urdu (prompt language English → translate to Urdu), the answer textarea uses `dir="rtl"`, `lang="ur"`, and right-aligned text so the caret starts on the right. The app cannot force the OS keyboard layout — install or switch to an Urdu keyboard / input method on the device to type Urdu script. English target answers stay LTR. MCQ and arrange exercises are unchanged.
+**Urdu free-type answers:** when the session target is Urdu (prompt language English → translate to Urdu), the answer textarea uses `dir="rtl"`, `lang="ur"`, and right-aligned text so the caret starts on the right. The app cannot force the OS keyboard layout — install or switch to an Urdu keyboard / input method on the device to type Urdu script. English target answers stay LTR. Fill-blank blanked text follows the same RTL when the target is Urdu.
 
 ### Try bulk import (Phase 1)
 
@@ -150,7 +156,7 @@ scripts/
 
 ## Deferred
 
-- Fill-in-the-blanks, arrange with distractors, “which rules?” multi-select, speech — Phase 2b
+- Speech-to-text / speech verification (Phase 2b progressive enhancement; Urdu STT may be limited)
 - Progress dashboards / weak-area coaching / anti-repeat selection — Phase 4
 - Real MT provider (stub only; never auto-publishes)
 - Bulk export / round-trip catalog edit

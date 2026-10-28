@@ -41,16 +41,23 @@ public sealed record PracticeItemDto(
     byte ExerciseType,
     string PromptLanguage,
     string PromptText,
-    /// <summary>MCQ options (shuffled). Null for arrange/free-type.</summary>
+    /// <summary>MCQ options, fill-blank word bank, or rule labels (RulesApply).</summary>
     IReadOnlyList<string>? Options,
-    /// <summary>Shuffled tokens for arrange. Null for MCQ/free-type.</summary>
-    IReadOnlyList<string>? Tokens);
+    /// <summary>Shuffled tokens for arrange / arrange-with-distractors.</summary>
+    IReadOnlyList<string>? Tokens,
+    /// <summary>Target sentence with ____ for FillBlank.</summary>
+    string? BlankedText = null,
+    /// <summary>Rule ids parallel to Options for RulesApply multi-select.</summary>
+    IReadOnlyList<int>? OptionIds = null);
 
 public sealed record SubmitAttemptRequest(
     int SequenceNo,
     int SentenceId,
     byte ExerciseType,
-    /// <summary>Selected option text, space-joined arrange order, or free-typed answer.</summary>
+    /// <summary>
+    /// Selected option text; space-joined arrange order; free-typed answer;
+    /// fill-blank word; or comma-separated rule ids for RulesApply.
+    /// </summary>
     string StudentAnswer);
 
 public sealed record AttemptResultDto(
