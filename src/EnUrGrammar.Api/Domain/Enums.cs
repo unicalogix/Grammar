@@ -27,3 +27,10 @@ public enum ImportBatchStatus : byte
     Committed = 2,
     Failed = 3
 }
+
+public enum ExerciseType : byte
+{
+    MultiChoice = 1,
+    Arrange = 2,
+    FreeType = 3
+}

@@ -66,6 +66,7 @@ builder.Services.AddAuthorization();
 builder.Services.AddScoped<JwtTokenService>();
 builder.Services.AddScoped<ImportService>();
 builder.Services.AddScoped<TranslationStubService>();
+builder.Services.AddScoped<PracticeService>();
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();

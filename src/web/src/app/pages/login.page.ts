@@ -10,7 +10,7 @@ import { AuthService } from '../services/auth.service';
   template: `
     <section class="panel">
       <h2>Sign in</h2>
-      <p class="hint">Admin / Teacher can manage content. Seed: admin&#64;enur.local</p>
+      <p class="hint">Student practice: student&#64;enur.local · Admin: admin&#64;enur.local</p>
       <label>Email<input type="email" [(ngModel)]="email" autocomplete="username" /></label>
       <label>Password<input type="password" [(ngModel)]="password" autocomplete="current-password" /></label>
       <button type="button" (click)="submit()" [disabled]="busy()">Sign in</button>
@@ -29,8 +29,8 @@ import { AuthService } from '../services/auth.service';
   `]
 })
 export class LoginPage {
-  email = 'admin@enur.local';
-  password = 'ChangeMe!Admin123';
+  email = 'student@enur.local';
+  password = 'ChangeMe!Student123';
   readonly busy = signal(false);
   readonly error = signal<string | null>(null);
 
@@ -42,7 +42,7 @@ export class LoginPage {
     this.auth.login(this.email.trim(), this.password).subscribe({
       next: () => {
         this.busy.set(false);
-        this.router.navigateByUrl('/admin/sentences');
+        this.router.navigateByUrl('/practice');
       },
       error: (err) => {
         this.busy.set(false);

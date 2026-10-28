@@ -27,6 +27,20 @@ export const contentAuthorGuard: CanActivateFn = () => {
       if (!u) return router.createUrlTree(['/login']);
       const roles = u.roles ?? [];
       if (roles.includes('Admin') || roles.includes('Teacher')) return true;
+      if (roles.includes('Student')) return router.createUrlTree(['/practice']);
+      return router.createUrlTree(['/login']);
+    })
+  );
+};
+
+/** Student practice; Teacher/Admin may preview. */
+export const practiceGuard: CanActivateFn = () => {
+  const router = inject(Router);
+  return ensureUser().pipe(
+    map((u) => {
+      if (!u) return router.createUrlTree(['/login']);
+      const roles = u.roles ?? [];
+      if (roles.includes('Student') || roles.includes('Teacher') || roles.includes('Admin')) return true;
       return router.createUrlTree(['/login']);
     })
   );
