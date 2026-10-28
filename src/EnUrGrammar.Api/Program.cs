@@ -66,12 +66,15 @@ builder.Services.AddAuthorization();
 builder.Services.AddScoped<JwtTokenService>();
 builder.Services.AddScoped<ImportService>();
 builder.Services.AddScoped<TranslationStubService>();
+builder.Services.AddScoped<PracticeService>();
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new OpenApiInfo { Title = "EN–UR Grammar API", Version = "v1" });
+    // IFormFile as binary so multipart upload actions document correctly in OpenAPI
+    c.MapType<IFormFile>(() => new OpenApiSchema { Type = "string", Format = "binary" });
     c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
         Description = "JWT Authorization header using the Bearer scheme. Example: \"Bearer {token}\"",

@@ -1,0 +1,63 @@
+namespace EnUrGrammar.Contracts.Practice;
+
+public sealed record PracticeCatalogDto(
+    IReadOnlyList<PracticeGradeOptionDto> Grades,
+    IReadOnlyList<PracticeRuleOptionDto> Rules);
+
+public sealed record PracticeGradeOptionDto(
+    int Id,
+    string NameEn,
+    string? NameUr,
+    string? Code,
+    int SortOrder);
+
+public sealed record PracticeRuleOptionDto(
+    int Id,
+    string NameEn,
+    string? NameUr,
+    string? Code,
+    IReadOnlyList<int> GradeIds);
+
+public sealed record StartPracticeSessionRequest(
+    IReadOnlyList<int> GradeIds,
+    IReadOnlyList<int>? RuleIds,
+    byte? Difficulty,
+    string SourceLanguage,
+    int? ItemCount);
+
+public sealed record PracticeSessionDto(
+    int Id,
+    string SourceLanguage,
+    string TargetLanguage,
+    int ItemCount,
+    DateTime StartedAtUtc,
+    DateTime? EndedAtUtc,
+    string? EmptyMessage,
+    PracticeItemDto? Item);
+
+public sealed record PracticeItemDto(
+    int SequenceNo,
+    int SentenceId,
+    byte ExerciseType,
+    string PromptLanguage,
+    string PromptText,
+    /// <summary>MCQ options (shuffled). Null for arrange/free-type.</summary>
+    IReadOnlyList<string>? Options,
+    /// <summary>Shuffled tokens for arrange. Null for MCQ/free-type.</summary>
+    IReadOnlyList<string>? Tokens);
+
+public sealed record SubmitAttemptRequest(
+    int SequenceNo,
+    int SentenceId,
+    byte ExerciseType,
+    /// <summary>Selected option text, space-joined arrange order, or free-typed answer.</summary>
+    string StudentAnswer);
+
+public sealed record AttemptResultDto(
+    int AttemptId,
+    int SequenceNo,
+    bool IsCorrect,
+    string ExpectedAnswer,
+    string StudentAnswer,
+    PracticeItemDto? NextItem,
+    bool SessionComplete);
