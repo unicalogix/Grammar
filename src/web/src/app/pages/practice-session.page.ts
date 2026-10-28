@@ -74,11 +74,20 @@ import { AttemptResult, PracticeItem, PracticeService, PracticeSession } from '.
                 <textarea
                   rows="3"
                   [(ngModel)]="freeAnswer"
-                  [attr.lang]="session()!.targetLanguage"
-                  [attr.dir]="session()!.targetLanguage === 'ur' ? 'rtl' : 'ltr'"
+                  [attr.lang]="answerLang()"
+                  [attr.dir]="answerDir()"
+                  [class.rtl]="isUrduAnswer()"
+                  [class.ltr]="!isUrduAnswer()"
+                  autocomplete="off"
+                  spellcheck="false"
                   [disabled]="busy()"
                 ></textarea>
               </label>
+              @if (isUrduAnswer()) {
+                <p class="kb-hint">
+                  Answer box is right-to-left for Urdu. Switch to an Urdu keyboard (or OS input method) yourself — the app cannot change your keyboard layout.
+                </p>
+              }
               <button
                 type="button"
                 class="submit"
@@ -95,8 +104,10 @@ import { AttemptResult, PracticeItem, PracticeService, PracticeSession } from '.
             <p class="answer-label">Correct answer</p>
             <p
               class="answer"
-              [attr.lang]="session()!.targetLanguage"
-              [attr.dir]="session()!.targetLanguage === 'ur' ? 'rtl' : 'ltr'"
+              [attr.lang]="answerLang()"
+              [attr.dir]="answerDir()"
+              [class.rtl]="isUrduAnswer()"
+              [class.ltr]="!isUrduAnswer()"
             >
               {{ feedback()!.expectedAnswer }}
             </p>
@@ -150,6 +161,17 @@ import { AttemptResult, PracticeItem, PracticeService, PracticeSession } from '.
       font: inherit; padding: .75rem; border: 1px solid var(--line); border-radius: .55rem;
       background: rgba(255,255,255,.85); resize: vertical; min-height: 5rem;
     }
+    textarea.rtl {
+      direction: rtl;
+      text-align: right;
+    }
+    textarea.ltr {
+      direction: ltr;
+      text-align: left;
+    }
+    .kb-hint {
+      margin: 0; font-size: .8rem; color: var(--muted); line-height: 1.4;
+    }
     .submit, .btn {
       justify-self: start; border: 0; background: var(--accent); color: #fff;
       text-decoration: none; display: inline-flex; align-items: center;
@@ -166,6 +188,8 @@ import { AttemptResult, PracticeItem, PracticeService, PracticeSession } from '.
     .verdict { margin: 0; font-weight: 700; font-size: 1.1rem; }
     .answer-label { margin: .4rem 0 0; font-size: .8rem; color: var(--muted); font-weight: 650; }
     .answer { margin: 0; font-size: 1.15rem; font-weight: 650; }
+    .answer.rtl { direction: rtl; text-align: right; }
+    .answer.ltr { direction: ltr; text-align: left; }
     .done { display: grid; gap: .85rem; }
     .done h1 { margin: 0; font-family: var(--font-display); font-size: 2rem; }
     .error { color: #8b1e1e; font-weight: 600; }
@@ -218,6 +242,19 @@ export class PracticeSessionPage implements OnInit {
 
   exerciseLabel(type: number): string {
     return type === 1 ? 'Multiple choice' : type === 2 ? 'Arrange words' : 'Type the answer';
+  }
+
+  /** Free-type / revealed answer language matches session target (Urdu or English). */
+  isUrduAnswer(): boolean {
+    return this.session()?.targetLanguage === 'ur';
+  }
+
+  answerLang(): 'ur' | 'en' {
+    return this.isUrduAnswer() ? 'ur' : 'en';
+  }
+
+  answerDir(): 'rtl' | 'ltr' {
+    return this.isUrduAnswer() ? 'rtl' : 'ltr';
   }
 
   selectMcq(opt: string): void {
