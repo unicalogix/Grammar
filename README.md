@@ -120,6 +120,8 @@ Open [http://127.0.0.1:4317](http://127.0.0.1:4317). Dev traffic to `/api` is pr
 5. After each attempt, see correct/incorrect and the correct answer
 6. Sessions and attempts are stored for later progress (Phase 4)
 
+**Urdu free-type answers:** when the session target is Urdu (prompt language English → translate to Urdu), the answer textarea uses `dir="rtl"`, `lang="ur"`, and right-aligned text so the caret starts on the right. The app cannot force the OS keyboard layout — install or switch to an Urdu keyboard / input method on the device to type Urdu script. English target answers stay LTR. MCQ and arrange exercises are unchanged.
+
 ### Try bulk import (Phase 1)
 
 1. Sign in as admin at http://127.0.0.1:4317/login
