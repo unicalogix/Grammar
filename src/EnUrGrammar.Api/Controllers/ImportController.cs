@@ -1,5 +1,6 @@
 using EnUrGrammar.Api.Data;
 using EnUrGrammar.Api.Domain;
+using EnUrGrammar.Api.Models;
 using EnUrGrammar.Api.Services;
 using EnUrGrammar.Contracts.Import;
 using Microsoft.AspNetCore.Authorization;
@@ -45,15 +46,16 @@ public class ImportController : ControllerBase
     }
 
     [HttpPost("batches")]
+    [Consumes("multipart/form-data")]
     [RequestSizeLimit(10_000_000)]
     public async Task<ActionResult<ImportBatchDto>> Upload(
-        [FromForm] IFormFile file,
-        [FromForm] string entityKind,
+        [FromForm] ImportUploadForm form,
         CancellationToken ct)
     {
+        var file = form.File;
         if (file is null || file.Length == 0)
             return BadRequest(new { error = "file is required." });
-        if (!TryParseKind(entityKind, out var kind))
+        if (!TryParseKind(form.EntityKind, out var kind))
             return BadRequest(new { error = "entityKind must be grades, rules, or sentences." });
 
         var userId = _users.GetUserId(User) ?? string.Empty;
