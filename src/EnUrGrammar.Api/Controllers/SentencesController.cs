@@ -32,13 +32,13 @@ public class SentencesController : ControllerBase
     {
         var q = _db.Sentences.AsNoTracking()
             .Include(s => s.Grade)
-            .Include(s => s.SentenceRules).ThenInclude(sr => sr.Rule)
+            .Include(s => s.SentenceRules).ThenInclude(sr => sr.RuleItem)
             .Where(s => !s.IsDeleted);
 
         if (gradeId is not null) q = q.Where(s => s.GradeId == gradeId);
         if (status is not null) q = q.Where(s => (byte)s.Status == status);
         if (difficulty is not null) q = q.Where(s => (byte)s.Difficulty == difficulty);
-        if (ruleId is not null) q = q.Where(s => s.SentenceRules.Any(sr => sr.RuleId == ruleId));
+        if (ruleId is not null) q = q.Where(s => s.SentenceRules.Any(sr => sr.RuleItemId == ruleId));
 
         var list = await q.OrderByDescending(s => s.CreatedAtUtc).Take(500).ToListAsync(ct);
         return Ok(list.Select(ToDto));
@@ -205,7 +205,7 @@ public class SentencesController : ControllerBase
     private IQueryable<Sentence> QueryOne(int id) =>
         _db.Sentences.AsNoTracking()
             .Include(s => s.Grade)
-            .Include(s => s.SentenceRules).ThenInclude(sr => sr.Rule)
+            .Include(s => s.SentenceRules).ThenInclude(sr => sr.RuleItem)
             .Where(s => s.Id == id && !s.IsDeleted);
 
     private async Task ReplaceRulesAsync(int sentenceId, IReadOnlyList<int>? ruleIds, CancellationToken ct)
@@ -213,7 +213,7 @@ public class SentencesController : ControllerBase
         var ids = (ruleIds ?? []).Distinct().ToList();
         if (ids.Count > 0)
         {
-            var valid = await _db.Rules.Where(r => ids.Contains(r.Id)).Select(r => r.Id).ToListAsync(ct);
+            var valid = await _db.RuleItems.Where(r => ids.Contains(r.Id)).Select(r => r.Id).ToListAsync(ct);
             if (valid.Count != ids.Count)
                 throw new InvalidOperationException("One or more ruleIds are invalid.");
         }
@@ -221,7 +221,7 @@ public class SentencesController : ControllerBase
         var existing = await _db.SentenceRules.Where(sr => sr.SentenceId == sentenceId).ToListAsync(ct);
         _db.SentenceRules.RemoveRange(existing);
         foreach (var rid in ids)
-            _db.SentenceRules.Add(new SentenceRule { SentenceId = sentenceId, RuleId = rid });
+            _db.SentenceRules.Add(new SentenceRule { SentenceId = sentenceId, RuleItemId = rid });
         await _db.SaveChangesAsync(ct);
     }
 
@@ -247,6 +247,6 @@ public class SentencesController : ControllerBase
         s.MtConfirmedAtUtc,
         s.CreatedAtUtc,
         s.ApprovedAtUtc,
-        s.SentenceRules?.Select(sr => sr.RuleId).ToList() ?? [],
-        s.SentenceRules?.Select(sr => sr.Rule?.Code ?? sr.RuleId.ToString()).ToList() ?? []);
+        s.SentenceRules?.Select(sr => sr.RuleItemId).ToList() ?? [],
+        s.SentenceRules?.Select(sr => sr.RuleItem?.Code ?? sr.RuleItemId.ToString()).ToList() ?? []);
 }

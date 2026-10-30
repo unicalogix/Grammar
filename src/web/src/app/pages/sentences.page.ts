@@ -66,7 +66,7 @@ import { ContentService, GradeDto, RuleDto, SentenceDto } from '../services/cont
         <label>Rules
           <select multiple [(ngModel)]="form.ruleIds" size="4">
             @for (r of rules(); track r.id) {
-              <option [ngValue]="r.id">{{ r.code || r.nameEn }}</option>
+              <option [ngValue]="r.id">{{ r.categoryNameEn }} · {{ r.nameEn }}</option>
             }
           </select>
         </label>

@@ -4,7 +4,7 @@ English–Urdu grammar practice for school kids and self-learners. Teachers auth
 
 **Stack:** Angular 19 · ASP.NET Core 8 Web API · SQL Server · EF Core · JWT identity
 
-This repo currently ships **Phase 0 foundations** plus **Phase 1 content/admin**: grades/rules/sentences CRUD, Grade↔Rule and Sentence↔Rule links, CSV/Excel import (templates → validate → commit), and an MT suggestion stub that never auto-publishes. Practice exercises come later.
+This repo ships **Phase 0–2b + Saved Tests**: foundations, content/admin (CRUD + CSV/Excel import + MT stub), student practice (MCQ, arrange, free-type, fill-in-the-blank, arrange with distractors, “which rules apply?”), and **reusable saved tests** (grid dropdown or sequential layouts).
 
 ---
 
@@ -71,30 +71,31 @@ export Jwt__Key='DEV_ONLY_CHANGE_ME_32CHARS_MIN_KEY!!'
 
 On startup the API:
 
-1. Applies EF Core migrations
+1. Applies EF Core migrations (including `PracticeSessions` / `Attempts`)
 2. Seeds roles `Admin`, `Teacher`, `Student`
-3. Seeds sample admin, Grade 5, and `PAST_SIMPLE` rule (if empty)
+3. Seeds sample admin, student, Grade 5, rule categories (**Tense**, **Direct and Indirect Speech**) with rule items, and approved practice sentences (if empty)
 
 ### Default seed credentials
 
-| Field    | Value                 |
-|----------|-----------------------|
-| Email    | `admin@enur.local`    |
-| Password | `ChangeMe!Admin123`   |
-| Role     | Admin                 |
+| Field    | Value                   | Role    |
+|----------|-------------------------|---------|
+| Email    | `admin@enur.local`      | Admin   |
+| Password | `ChangeMe!Admin123`     |         |
+| Email    | `student@enur.local`    | Student |
+| Password | `ChangeMe!Student123`   |         |
 
-**Change this password before any non-local use.**
+**Change these passwords before any non-local use.**
 
 Smoke test:
 
 ```bash
-# login
+# login as student
 TOKEN=$(curl -s -X POST http://127.0.0.1:5147/api/auth/login \
   -H 'Content-Type: application/json' \
-  -d '{"email":"admin@enur.local","password":"ChangeMe!Admin123"}' | jq -r .accessToken)
+  -d '{"email":"student@enur.local","password":"ChangeMe!Student123"}' | jq -r .accessToken)
 
-# protected ping
-curl -s http://127.0.0.1:5147/api/ping -H "Authorization: Bearer $TOKEN"
+# practice catalog
+curl -s http://127.0.0.1:5147/api/practice/catalog -H "Authorization: Bearer $TOKEN"
 ```
 
 ---
@@ -108,31 +109,41 @@ npm start
 # or: ./scripts/dev-web.sh
 ```
 
-Open [http://127.0.0.1:4317](http://127.0.0.1:4317). Sign in with the seed admin. Dev traffic to `/api` is proxied to the API on port `5147`.
+Open [http://127.0.0.1:4317](http://127.0.0.1:4317). Dev traffic to `/api` is proxied to the API on port `5147`.
+
+### Try Saved Tests
+
+1. Sign in as **admin@enur.local** / `ChangeMe!Admin123`
+2. Open **Tests** — create a test (layout Sequential or Grid; for Grid pick Rules or Translation dropdowns; for Sequential pick exercise types; set grades/filters; prompt language checkboxes: English and/or Translation)
+3. Sign in as **student@enur.local** / `ChangeMe!Student123`
+4. Open **Practice** — take a seeded or newly saved test
+   - **Grid:** all questions on one page; dropdown → tick / cross; tap ✕ to reveal the correct answer
+   - **Sequential:** one question at a time (same exercise UIs as free practice)
+
+### Try student practice (Phase 2a + 2b)
+
+1. Sign in as **student@enur.local** / `ChangeMe!Student123` (or admin/teacher to preview)
+2. Open **Practice** (home) → expand **Free practice setup**
+3. Select grade(s), optional rules, difficulty, prompt language (EN or UR)
+4. **Start practice** — items cycle through:
+   - Multi-choice
+   - Arrange words
+   - Free type
+   - Fill in the blank (word bank)
+   - Arrange with 1–2 distractor words (leave extras unused)
+   - Which rules apply? (multi-select)
+5. After each attempt, see correct/incorrect and the correct answer
+6. Sessions and attempts are stored for later progress (Phase 4)
+
+**Urdu free-type answers:** when the session target is Urdu (prompt language English → translate to Urdu), the answer textarea uses `dir="rtl"`, `lang="ur"`, and right-aligned text so the caret starts on the right. The app cannot force the OS keyboard layout — install or switch to an Urdu keyboard / input method on the device to type Urdu script. English target answers stay LTR. Fill-blank blanked text follows the same RTL when the target is Urdu.
 
 ### Try bulk import (Phase 1)
 
 1. Sign in as admin at http://127.0.0.1:4317/login
 2. Open **Import**
-3. Choose entity (Grades / Rules / Sentences) → **Download CSV template**
+3. Choose entity (Grades / Rules / Sentences) → **Download CSV template** (Rules CSV includes `CategoryCode` / `CategoryNameEn` columns for hierarchical items)
 4. Keep or edit the example row (sentences need existing `GradeCode` like `G5` and `RuleCodes` like `PAST_SIMPLE`)
 5. Upload → review validation errors → **Confirm commit** (defaults to Draft unless Status=Approved)
-6. Or via curl:
-
-```bash
-TOKEN=$(curl -s -X POST http://127.0.0.1:5147/api/auth/login \
-  -H 'Content-Type: application/json' \
-  -d '{"email":"admin@enur.local","password":"ChangeMe!Admin123"}' | jq -r .accessToken)
-
-curl -s -OJ -H "Authorization: Bearer $TOKEN" \
-  'http://127.0.0.1:5147/api/import/templates/sentences?format=csv'
-
-curl -s -H "Authorization: Bearer $TOKEN" \
-  -F entityKind=sentences -F file=@enur-sentences-template.csv \
-  http://127.0.0.1:5147/api/import/batches
-
-# then POST /api/import/batches/{id}/commit when status=Validated
-```
 
 ---
 
@@ -154,10 +165,11 @@ scripts/
 
 ## Deferred
 
-- Practice exercises (MCQ, arrange, free-type) — Phase 2a
+- Speech-to-text / speech verification (Phase 2b progressive enhancement; Urdu STT may be limited)
+- Progress dashboards / weak-area coaching / anti-repeat selection — Phase 4
 - Real MT provider (stub only; never auto-publishes)
 - Bulk export / round-trip catalog edit
-- Password reset, lockout, MFA, refresh tokens, audit, rate limits, locked CORS
+- Password reset, lockout, MFA, refresh tokens, audit, rate limits, locked CORS — Phase 3
 - Multi-org / class hierarchy; teacher scoped to own content
 - Production hosting / CI deploy
 
