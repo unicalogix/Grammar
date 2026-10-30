@@ -16,6 +16,9 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<Sentence> Sentences => Set<Sentence>();
     public DbSet<SentenceRule> SentenceRules => Set<SentenceRule>();
     public DbSet<ImportBatch> ImportBatches => Set<ImportBatch>();
+    public DbSet<PracticeSession> PracticeSessions => Set<PracticeSession>();
+    public DbSet<Attempt> Attempts => Set<Attempt>();
+    public DbSet<SavedTest> SavedTests => Set<SavedTest>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -84,6 +87,55 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
             e.Property(x => x.EntityKind).HasConversion<byte>();
             e.Property(x => x.Status).HasConversion<byte>();
             e.HasIndex(x => new { x.UploadedByUserId, x.CreatedAtUtc });
+        });
+
+        builder.Entity<PracticeSession>(e =>
+        {
+            e.Property(x => x.UserId).HasMaxLength(450).IsRequired();
+            e.Property(x => x.SourceLanguage).HasMaxLength(2).IsRequired().IsFixedLength();
+            e.Property(x => x.TargetLanguage).HasMaxLength(2).IsRequired().IsFixedLength();
+            e.HasIndex(x => new { x.UserId, x.StartedAtUtc });
+            e.HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.UserId)
+                .OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.SavedTest).WithMany().HasForeignKey(x => x.SavedTestId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        builder.Entity<SavedTest>(e =>
+        {
+            e.Property(x => x.Name).HasMaxLength(200).IsRequired();
+            e.Property(x => x.Description).HasMaxLength(1000);
+            e.Property(x => x.ExerciseTypesJson).HasMaxLength(200).IsRequired();
+            e.Property(x => x.GradeIdsJson).HasMaxLength(500).IsRequired();
+            e.Property(x => x.RuleIdsJson).HasMaxLength(500);
+            e.Property(x => x.SourceLanguage).HasMaxLength(2).IsRequired().IsFixedLength();
+            e.Property(x => x.CreatedByUserId).HasMaxLength(450).IsRequired();
+            e.Property(x => x.Layout).HasConversion<byte>();
+            e.Property(x => x.DropdownMode).HasConversion<byte>();
+            e.HasIndex(x => x.IsActive);
+            e.HasIndex(x => new { x.CreatedByUserId, x.CreatedAtUtc });
+            e.HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.CreatedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<Attempt>(e =>
+        {
+            e.Property(x => x.UserId).HasMaxLength(450).IsRequired();
+            e.Property(x => x.PromptLanguage).HasMaxLength(2).IsRequired().IsFixedLength();
+            e.Property(x => x.ExpectedAnswer).HasMaxLength(500).IsRequired();
+            e.Property(x => x.StudentAnswer).HasMaxLength(500).IsRequired();
+            e.Property(x => x.NormalizedExpected).HasMaxLength(500).IsRequired();
+            e.Property(x => x.NormalizedStudent).HasMaxLength(500).IsRequired();
+            e.Property(x => x.ExerciseType).HasConversion<byte>();
+            e.HasOne(x => x.PracticeSession).WithMany(s => s.Attempts)
+                .HasForeignKey(x => x.PracticeSessionId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Sentence).WithMany().HasForeignKey(x => x.SentenceId)
+                .OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.UserId)
+                .OnDelete(DeleteBehavior.Restrict);
+            e.HasIndex(x => new { x.PracticeSessionId, x.SequenceNo });
+            e.HasIndex(x => new { x.UserId, x.AnsweredAtUtc });
+            e.HasIndex(x => x.SentenceId);
         });
     }
 }
