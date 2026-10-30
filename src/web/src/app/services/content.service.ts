@@ -15,10 +15,11 @@ export interface GradeDto {
   ruleIds: number[];
 }
 
-export interface RuleDto {
+/** Flat rule detail (leaf) used by sentences, grades, filters, grid dropdowns. */
+export interface RuleDetailDto {
   id: number;
-  categoryId: number;
-  categoryNameEn: string;
+  ruleId: number;
+  ruleNameEn: string;
   nameEn: string;
   nameUr: string | null;
   explanationEn: string | null;
@@ -28,7 +29,7 @@ export interface RuleDto {
   gradeIds: number[];
 }
 
-export interface RuleItemSummaryDto {
+export interface RuleDetailSummaryDto {
   id: number;
   nameEn: string;
   nameUr: string | null;
@@ -37,14 +38,15 @@ export interface RuleItemSummaryDto {
   isActive: boolean;
 }
 
-export interface RuleCategoryDto {
+/** Master rule with nested details. */
+export interface RuleDto {
   id: number;
   nameEn: string;
   nameUr: string | null;
   code: string | null;
   sortOrder: number;
   isActive: boolean;
-  items: RuleItemSummaryDto[];
+  details: RuleDetailSummaryDto[];
 }
 
 export interface SentenceDto {
@@ -105,6 +107,14 @@ export class ContentService {
     return this.http.put<GradeDto>(`${base()}/grades/${id}/rules`, { ruleIds });
   }
 
+  /** Flat rule details for sentence/grade/filter multi-selects. */
+  listRuleDetails(activeOnly = false): Observable<RuleDetailDto[]> {
+    let params = new HttpParams();
+    if (activeOnly) params = params.set('activeOnly', 'true');
+    return this.http.get<RuleDetailDto[]>(`${base()}/rule-details`, { params });
+  }
+
+  /** Master rules with nested details (admin page). */
   listRules(activeOnly = false): Observable<RuleDto[]> {
     let params = new HttpParams();
     if (activeOnly) params = params.set('activeOnly', 'true');
@@ -112,28 +122,13 @@ export class ContentService {
   }
 
   saveRule(
-    body: Partial<RuleDto> & { categoryId: number; nameEn: string; isActive: boolean },
-    id?: number
-  ): Observable<RuleDto> {
-    return id
-      ? this.http.put<RuleDto>(`${base()}/rules/${id}`, body)
-      : this.http.post<RuleDto>(`${base()}/rules`, body);
-  }
-
-  listRuleCategories(activeOnly = false): Observable<RuleCategoryDto[]> {
-    let params = new HttpParams();
-    if (activeOnly) params = params.set('activeOnly', 'true');
-    return this.http.get<RuleCategoryDto[]>(`${base()}/rule-categories`, { params });
-  }
-
-  saveRuleCategory(
     body: {
       nameEn: string;
       nameUr?: string | null;
       code?: string | null;
       sortOrder: number;
       isActive: boolean;
-      items?: {
+      details?: {
         id?: number | null;
         nameEn: string;
         nameUr?: string | null;
@@ -145,14 +140,14 @@ export class ContentService {
       }[];
     },
     id?: number
-  ): Observable<RuleCategoryDto> {
+  ): Observable<RuleDto> {
     return id
-      ? this.http.put<RuleCategoryDto>(`${base()}/rule-categories/${id}`, body)
-      : this.http.post<RuleCategoryDto>(`${base()}/rule-categories`, body);
+      ? this.http.put<RuleDto>(`${base()}/rules/${id}`, body)
+      : this.http.post<RuleDto>(`${base()}/rules`, body);
   }
 
-  deactivateRuleCategory(id: number): Observable<void> {
-    return this.http.delete<void>(`${base()}/rule-categories/${id}`);
+  deactivateRule(id: number): Observable<void> {
+    return this.http.delete<void>(`${base()}/rules/${id}`);
   }
 
   listSentences(filters: { gradeId?: number; status?: number; difficulty?: number; ruleId?: number } = {}): Observable<SentenceDto[]> {

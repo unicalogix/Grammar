@@ -1,11 +1,11 @@
 namespace EnUrGrammar.Api.Domain;
 
-/// <summary>Leaf rule linked to sentences (e.g. "Simple Present", "Direct Speech").</summary>
-public class RuleItem
+/// <summary>Detail row under a Rule (e.g. "Simple Present", "Direct Speech"). Linked to sentences.</summary>
+public class RuleDetail
 {
     public int Id { get; set; }
-    public int CategoryId { get; set; }
-    public RuleCategory Category { get; set; } = null!;
+    public int RuleId { get; set; }
+    public Rule Rule { get; set; } = null!;
     public string NameEn { get; set; } = string.Empty;
     public string? NameUr { get; set; }
     public string? ExplanationEn { get; set; }

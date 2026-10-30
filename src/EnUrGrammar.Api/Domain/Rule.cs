@@ -1,7 +1,7 @@
 namespace EnUrGrammar.Api.Domain;
 
-/// <summary>Parent group for rule items (e.g. "Tense", "Direct and Indirect Speech").</summary>
-public class RuleCategory
+/// <summary>Master rule (e.g. "Tense", "Types of Speech") with one-to-many details.</summary>
+public class Rule
 {
     public int Id { get; set; }
     public string NameEn { get; set; } = string.Empty;
@@ -13,5 +13,5 @@ public class RuleCategory
     public DateTime? UpdatedAtUtc { get; set; }
     public string? CreatedByUserId { get; set; }
 
-    public ICollection<RuleItem> Items { get; set; } = new List<RuleItem>();
+    public ICollection<RuleDetail> Details { get; set; } = new List<RuleDetail>();
 }

@@ -70,35 +70,37 @@ public static class DbSeeder
             grade = await db.Grades.OrderBy(g => g.SortOrder).FirstAsync();
         }
 
-        var tense = await EnsureCategoryAsync(db, logger, admin.Id, "TENSE", "Tense", "زمانہ", sortOrder: 1);
-        var speech = await EnsureCategoryAsync(db, logger, admin.Id,
-            "DIRECT_INDIRECT", "Direct and Indirect Speech", "براہ راست اور بالواسطہ کلام", sortOrder: 2);
+        var tense = await EnsureRuleAsync(db, logger, admin.Id, "TENSE", "Tense", "زمانہ", sortOrder: 1);
+        var speech = await EnsureRuleAsync(db, logger, admin.Id,
+            "TYPES_OF_SPEECH", "Types of Speech", "کلام کی اقسام", sortOrder: 2,
+            legacyCodes: ["DIRECT_INDIRECT"],
+            legacyNames: ["Direct and Indirect Speech"]);
 
-        var pastSimple = await EnsureRuleItemAsync(db, logger, admin.Id, grade.Id, tense.Id,
+        var pastSimple = await EnsureRuleDetailAsync(db, logger, admin.Id, grade.Id, tense.Id,
             "PAST_SIMPLE", "Past Simple", "ماضی مطلق",
             "Used for completed actions in the past.", "ماضی میں مکمل ہونے والے کاموں کے لیے۔", 10);
-        await EnsureRuleItemAsync(db, logger, admin.Id, grade.Id, tense.Id,
+        await EnsureRuleDetailAsync(db, logger, admin.Id, grade.Id, tense.Id,
             "PRESENT_SIMPLE", "Simple Present", "حال مطلق",
             "Used for habits and general truths.", "عادتوں اور عام سچائیوں کے لیے۔", 20);
-        await EnsureRuleItemAsync(db, logger, admin.Id, grade.Id, tense.Id,
+        await EnsureRuleDetailAsync(db, logger, admin.Id, grade.Id, tense.Id,
             "PRESENT_CONTINUOUS", "Present Continuous", "حال جاری",
             "Used for actions happening now.", "ابھی ہو رہے کاموں کے لیے۔", 30);
-        await EnsureRuleItemAsync(db, logger, admin.Id, grade.Id, tense.Id,
+        await EnsureRuleDetailAsync(db, logger, admin.Id, grade.Id, tense.Id,
             "PRESENT_PERFECT", "Present Perfect", "حال کامل",
             "Used for past actions with present relevance.", "ماضی کے کام جو حال سے تعلق رکھتے ہیں۔", 40);
-        await EnsureRuleItemAsync(db, logger, admin.Id, grade.Id, tense.Id,
+        await EnsureRuleDetailAsync(db, logger, admin.Id, grade.Id, tense.Id,
             "FUTURE_SIMPLE", "Future Simple", "مستقبل مطلق",
             "Used for actions that will happen later.", "آنے والے کاموں کے لیے۔", 50);
 
-        await EnsureRuleItemAsync(db, logger, admin.Id, grade.Id, speech.Id,
+        await EnsureRuleDetailAsync(db, logger, admin.Id, grade.Id, speech.Id,
             "DIRECT_SPEECH", "Direct Speech", "براہ راست کلام",
             "Exact words of the speaker in quotation marks.", "اسپیکر کے اصل الفاظ۔", 10);
-        await EnsureRuleItemAsync(db, logger, admin.Id, grade.Id, speech.Id,
+        await EnsureRuleDetailAsync(db, logger, admin.Id, grade.Id, speech.Id,
             "INDIRECT_SPEECH", "Indirect Speech", "بالواسطہ کلام",
             "Reported speech without quotation marks.", "رپورٹ شدہ کلام۔", 20);
 
         // Rename legacy Present Simple label if still using old wording
-        var presentSimple = await db.RuleItems.FirstOrDefaultAsync(r => r.Code == "PRESENT_SIMPLE");
+        var presentSimple = await db.RuleDetails.FirstOrDefaultAsync(r => r.Code == "PRESENT_SIMPLE");
         if (presentSimple is not null && presentSimple.NameEn == "Present Simple")
         {
             presentSimple.NameEn = "Simple Present";
@@ -134,7 +136,7 @@ public static class DbSeeder
                 };
                 db.Sentences.Add(sentence);
                 await db.SaveChangesAsync();
-                db.SentenceRules.Add(new SentenceRule { SentenceId = sentence.Id, RuleItemId = pastSimple.Id });
+                db.SentenceRules.Add(new SentenceRule { SentenceId = sentence.Id, RuleDetailId = pastSimple.Id });
             }
             await db.SaveChangesAsync();
             logger.LogInformation("Seeded {Count} approved sample sentences for practice", samples.Length);
@@ -216,26 +218,62 @@ public static class DbSeeder
         }
     }
 
-    private static async Task<RuleCategory> EnsureCategoryAsync(
+    private static async Task<Rule> EnsureRuleAsync(
         AppDbContext db, ILogger logger, string adminId,
-        string code, string nameEn, string nameUr, int sortOrder)
+        string code, string nameEn, string nameUr, int sortOrder,
+        string[]? legacyCodes = null,
+        string[]? legacyNames = null)
     {
-        var existing = await db.RuleCategories.FirstOrDefaultAsync(c => c.Code == code);
-        if (existing is not null) return existing;
+        var existing = await db.Rules.FirstOrDefaultAsync(r => r.Code == code);
+        if (existing is null && legacyCodes is not null)
+        {
+            foreach (var legacy in legacyCodes)
+            {
+                existing = await db.Rules.FirstOrDefaultAsync(r => r.Code == legacy);
+                if (existing is not null) break;
+            }
+        }
 
-        existing = await db.RuleCategories.FirstOrDefaultAsync(c => c.NameEn == nameEn);
+        if (existing is null)
+        {
+            existing = await db.Rules.FirstOrDefaultAsync(r => r.NameEn == nameEn);
+            if (existing is null && legacyNames is not null)
+            {
+                foreach (var legacy in legacyNames)
+                {
+                    existing = await db.Rules.FirstOrDefaultAsync(r => r.NameEn == legacy);
+                    if (existing is not null) break;
+                }
+            }
+        }
+
         if (existing is not null)
         {
-            if (existing.Code is null)
+            var changed = false;
+            if (existing.Code != code)
             {
                 existing.Code = code;
+                changed = true;
+            }
+            if (existing.NameEn != nameEn)
+            {
+                existing.NameEn = nameEn;
+                changed = true;
+            }
+            if (existing.NameUr != nameUr)
+            {
+                existing.NameUr = nameUr;
+                changed = true;
+            }
+            if (changed)
+            {
                 existing.UpdatedAtUtc = DateTime.UtcNow;
                 await db.SaveChangesAsync();
             }
             return existing;
         }
 
-        existing = new RuleCategory
+        existing = new Rule
         {
             Code = code,
             NameEn = nameEn,
@@ -245,18 +283,18 @@ public static class DbSeeder
             CreatedAtUtc = DateTime.UtcNow,
             CreatedByUserId = adminId
         };
-        db.RuleCategories.Add(existing);
+        db.Rules.Add(existing);
         await db.SaveChangesAsync();
-        logger.LogInformation("Seeded rule category {Code}", code);
+        logger.LogInformation("Seeded rule {Code}", code);
         return existing;
     }
 
-    private static async Task<RuleItem> EnsureRuleItemAsync(
+    private static async Task<RuleDetail> EnsureRuleDetailAsync(
         AppDbContext db,
         ILogger logger,
         string adminId,
         int gradeId,
-        int categoryId,
+        int ruleId,
         string code,
         string nameEn,
         string nameUr,
@@ -264,12 +302,12 @@ public static class DbSeeder
         string explanationUr,
         int sortOrder)
     {
-        var existing = await db.RuleItems.FirstOrDefaultAsync(r => r.Code == code);
+        var existing = await db.RuleDetails.FirstOrDefaultAsync(r => r.Code == code);
         if (existing is null)
         {
-            existing = new RuleItem
+            existing = new RuleDetail
             {
-                CategoryId = categoryId,
+                RuleId = ruleId,
                 NameEn = nameEn,
                 NameUr = nameUr,
                 ExplanationEn = explanationEn,
@@ -280,20 +318,20 @@ public static class DbSeeder
                 CreatedAtUtc = DateTime.UtcNow,
                 CreatedByUserId = adminId
             };
-            db.RuleItems.Add(existing);
+            db.RuleDetails.Add(existing);
             await db.SaveChangesAsync();
-            logger.LogInformation("Seeded rule item {Code}", code);
+            logger.LogInformation("Seeded rule detail {Code}", code);
         }
-        else if (existing.CategoryId != categoryId)
+        else if (existing.RuleId != ruleId)
         {
-            existing.CategoryId = categoryId;
+            existing.RuleId = ruleId;
             existing.UpdatedAtUtc = DateTime.UtcNow;
             await db.SaveChangesAsync();
         }
 
-        if (!await db.GradeRules.AnyAsync(gr => gr.GradeId == gradeId && gr.RuleItemId == existing.Id))
+        if (!await db.GradeRules.AnyAsync(gr => gr.GradeId == gradeId && gr.RuleDetailId == existing.Id))
         {
-            db.GradeRules.Add(new GradeRule { GradeId = gradeId, RuleItemId = existing.Id });
+            db.GradeRules.Add(new GradeRule { GradeId = gradeId, RuleDetailId = existing.Id });
             await db.SaveChangesAsync();
         }
 

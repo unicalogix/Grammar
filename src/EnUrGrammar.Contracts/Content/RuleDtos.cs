@@ -1,38 +1,16 @@
 namespace EnUrGrammar.Contracts.Content;
 
-/// <summary>Flat rule item (leaf) used by sentences, grades, practice filters, and grid dropdowns.</summary>
+/// <summary>Master rule with nested detail rows (admin authoring).</summary>
 public sealed record RuleDto(
     int Id,
-    int CategoryId,
-    string CategoryNameEn,
-    string NameEn,
-    string? NameUr,
-    string? ExplanationEn,
-    string? ExplanationUr,
-    string? Code,
-    bool IsActive,
-    IReadOnlyList<int> GradeIds);
-
-public sealed record RuleUpsertRequest(
-    int CategoryId,
-    string NameEn,
-    string? NameUr,
-    string? ExplanationEn,
-    string? ExplanationUr,
-    string? Code,
-    bool IsActive,
-    int SortOrder = 0);
-
-public sealed record RuleCategoryDto(
-    int Id,
     string NameEn,
     string? NameUr,
     string? Code,
     int SortOrder,
     bool IsActive,
-    IReadOnlyList<RuleItemSummaryDto> Items);
+    IReadOnlyList<RuleDetailSummaryDto> Details);
 
-public sealed record RuleItemSummaryDto(
+public sealed record RuleDetailSummaryDto(
     int Id,
     string NameEn,
     string? NameUr,
@@ -40,22 +18,15 @@ public sealed record RuleItemSummaryDto(
     int SortOrder,
     bool IsActive);
 
-public sealed record RuleCategoryUpsertRequest(
-    string NameEn,
-    string? NameUr,
-    string? Code,
-    int SortOrder,
-    bool IsActive);
-
-public sealed record RuleCategoryWithItemsUpsertRequest(
+public sealed record RuleWithDetailsUpsertRequest(
     string NameEn,
     string? NameUr,
     string? Code,
     int SortOrder,
     bool IsActive,
-    IReadOnlyList<RuleItemUpsertInCategoryRequest>? Items);
+    IReadOnlyList<RuleDetailUpsertInRuleRequest>? Details);
 
-public sealed record RuleItemUpsertInCategoryRequest(
+public sealed record RuleDetailUpsertInRuleRequest(
     int? Id,
     string NameEn,
     string? NameUr,
@@ -64,3 +35,26 @@ public sealed record RuleItemUpsertInCategoryRequest(
     string? Code,
     int SortOrder,
     bool IsActive);
+
+/// <summary>Flat rule detail used by sentences, grades, practice filters, and grid dropdowns.</summary>
+public sealed record RuleDetailDto(
+    int Id,
+    int RuleId,
+    string RuleNameEn,
+    string NameEn,
+    string? NameUr,
+    string? ExplanationEn,
+    string? ExplanationUr,
+    string? Code,
+    bool IsActive,
+    IReadOnlyList<int> GradeIds);
+
+public sealed record RuleDetailUpsertRequest(
+    int RuleId,
+    string NameEn,
+    string? NameUr,
+    string? ExplanationEn,
+    string? ExplanationUr,
+    string? Code,
+    bool IsActive,
+    int SortOrder = 0);

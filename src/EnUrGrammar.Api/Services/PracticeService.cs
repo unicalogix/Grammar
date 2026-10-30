@@ -53,15 +53,15 @@ public class PracticeService
             .Select(g => new PracticeGradeOptionDto(g.Id, g.NameEn, g.NameUr, g.Code, g.SortOrder))
             .ToListAsync(ct);
 
-        var rules = await _db.RuleItems.AsNoTracking()
-            .Where(r => r.IsActive && r.Category.IsActive)
-            .Include(r => r.Category)
+        var rules = await _db.RuleDetails.AsNoTracking()
+            .Where(r => r.IsActive && r.Rule.IsActive)
+            .Include(r => r.Rule)
             .Include(r => r.GradeRules)
-            .OrderBy(r => r.Category.SortOrder).ThenBy(r => r.SortOrder).ThenBy(r => r.NameEn)
+            .OrderBy(r => r.Rule.SortOrder).ThenBy(r => r.SortOrder).ThenBy(r => r.NameEn)
             .ToListAsync(ct);
 
         var ruleDtos = rules.Select(r => new PracticeRuleOptionDto(
-            r.Id, r.NameEn, r.NameUr, r.Code, r.CategoryId, r.Category.NameEn,
+            r.Id, r.NameEn, r.NameUr, r.Code, r.RuleId, r.Rule.NameEn,
             r.GradeRules.Select(gr => gr.GradeId).ToList())).ToList();
 
         return new PracticeCatalogDto(grades, ruleDtos);
@@ -193,7 +193,7 @@ public class PracticeService
             q = q.Where(s => s.Difficulty == difficulty);
 
         if (ruleIds.Count > 0)
-            q = q.Where(s => s.SentenceRules.Any(sr => ruleIds.Contains(sr.RuleItemId)));
+            q = q.Where(s => s.SentenceRules.Any(sr => ruleIds.Contains(sr.RuleDetailId)));
 
         // Grid rules mode needs sentences that have at least one linked rule
         if (layout == TestLayout.Grid && dropdownMode == DropdownMode.Rules)
@@ -301,7 +301,7 @@ public class PracticeService
             return (null, "ExerciseType does not match the current item.");
 
         var sentence = await _db.Sentences.AsNoTracking()
-            .Include(s => s.SentenceRules).ThenInclude(sr => sr.RuleItem)
+            .Include(s => s.SentenceRules).ThenInclude(sr => sr.RuleDetail)
             .FirstOrDefaultAsync(s => s.Id == planItem.SentenceId && !s.IsDeleted, ct);
         if (sentence is null)
             return (null, "Sentence not found.");
@@ -318,14 +318,14 @@ public class PracticeService
 
         if (planItem.ExerciseType == ExerciseType.GridDropdown && plan.DropdownMode == DropdownMode.Rules)
         {
-            var correctIds = sentence.SentenceRules.Select(sr => sr.RuleItemId).OrderBy(id => id).ToList();
+            var correctIds = sentence.SentenceRules.Select(sr => sr.RuleDetailId).OrderBy(id => id).ToList();
             correctOptionIds = correctIds;
             var studentId = int.TryParse(studentRaw.Trim(), out var sid) ? sid : 0;
             isCorrect = studentId > 0 && correctIds.Contains(studentId);
             expectedStored = FormatRuleLabels(
                 sentence.SentenceRules
-                    .Where(sr => sr.RuleItem is not null)
-                    .Select(sr => sr.RuleItem!)
+                    .Where(sr => sr.RuleDetail is not null)
+                    .Select(sr => sr.RuleDetail!)
                     .ToList());
             studentStored = Truncate(studentRaw.Trim(), 500);
             normExpected = string.Join(',', correctIds);
@@ -333,15 +333,15 @@ public class PracticeService
         }
         else if (planItem.ExerciseType == ExerciseType.RulesApply)
         {
-            var correctIds = sentence.SentenceRules.Select(sr => sr.RuleItemId).OrderBy(id => id).ToList();
+            var correctIds = sentence.SentenceRules.Select(sr => sr.RuleDetailId).OrderBy(id => id).ToList();
             var studentIds = ParseIdList(studentRaw);
             isCorrect = correctIds.Count > 0
                         && correctIds.Count == studentIds.Count
                         && correctIds.SequenceEqual(studentIds);
             expectedStored = FormatRuleLabels(
                 sentence.SentenceRules
-                    .Where(sr => sr.RuleItem is not null)
-                    .Select(sr => sr.RuleItem!)
+                    .Where(sr => sr.RuleDetail is not null)
+                    .Select(sr => sr.RuleDetail!)
                     .ToList());
             studentStored = Truncate(studentRaw.Trim(), 500);
             normExpected = string.Join(',', correctIds);
@@ -507,8 +507,8 @@ public class PracticeService
     private async Task<(IReadOnlyList<string> Labels, IReadOnlyList<int> Ids)> BuildGridRulesOptionsAsync(
         Sentence sentence, CancellationToken ct)
     {
-        var correctIds = sentence.SentenceRules.Select(sr => sr.RuleItemId).ToHashSet();
-        var correctRules = await _db.RuleItems.AsNoTracking()
+        var correctIds = sentence.SentenceRules.Select(sr => sr.RuleDetailId).ToHashSet();
+        var correctRules = await _db.RuleDetails.AsNoTracking()
             .Where(r => r.IsActive && correctIds.Contains(r.Id))
             .ToListAsync(ct);
 
@@ -516,7 +516,7 @@ public class PracticeService
         var needDistractors = Math.Max(1, GridDropdownOptionCount - Math.Max(1, correctRules.Count));
         // Prefer showing one correct + distractors when many rules linked (dropdown single-select)
         // Keep all correct rules in the option set so any linked rule is selectable as correct.
-        var distractorPool = await _db.RuleItems.AsNoTracking()
+        var distractorPool = await _db.RuleDetails.AsNoTracking()
             .Where(r => r.IsActive && !correctIds.Contains(r.Id))
             .ToListAsync(ct);
         var distractors = distractorPool
@@ -630,13 +630,13 @@ public class PracticeService
     private async Task<(IReadOnlyList<string> Labels, IReadOnlyList<int> Ids)> BuildRulesApplyOptionsAsync(
         Sentence sentence, CancellationToken ct)
     {
-        var correctIds = sentence.SentenceRules.Select(sr => sr.RuleItemId).ToHashSet();
-        var correctRules = await _db.RuleItems.AsNoTracking()
+        var correctIds = sentence.SentenceRules.Select(sr => sr.RuleDetailId).ToHashSet();
+        var correctRules = await _db.RuleDetails.AsNoTracking()
             .Where(r => r.IsActive && correctIds.Contains(r.Id))
             .ToListAsync(ct);
 
         var needDistractors = Math.Max(1, RulesApplyOptionCount - Math.Max(1, correctRules.Count));
-        var distractorPool = await _db.RuleItems.AsNoTracking()
+        var distractorPool = await _db.RuleDetails.AsNoTracking()
             .Where(r => r.IsActive && !correctIds.Contains(r.Id))
             .ToListAsync(ct);
         var distractors = distractorPool
@@ -778,10 +778,10 @@ public class PracticeService
             .ToList();
     }
 
-    private static string FormatRuleLabel(RuleItem r) =>
+    private static string FormatRuleLabel(RuleDetail r) =>
         string.IsNullOrWhiteSpace(r.NameUr) ? r.NameEn : $"{r.NameEn} / {r.NameUr}";
 
-    private static string FormatRuleLabels(IReadOnlyList<RuleItem> rules) =>
+    private static string FormatRuleLabels(IReadOnlyList<RuleDetail> rules) =>
         string.Join("; ", rules.OrderBy(r => r.NameEn).Select(FormatRuleLabel));
 
     private static string? NormalizeLang(string? raw)

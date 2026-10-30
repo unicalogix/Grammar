@@ -23,7 +23,7 @@ public class ImportService
         var csv = kind switch
         {
             ImportEntityKind.Grades => "Code,NameEn,NameUr,SortOrder,IsActive\nG6,Grade 6,جماعت ۶,6,true\n",
-            ImportEntityKind.Rules => "CategoryCode,CategoryNameEn,CategoryNameUr,Code,NameEn,NameUr,ExplanationEn,ExplanationUr,IsActive\nTENSE,Tense,زمانہ,PRESENT_SIMPLE,Simple Present,حال مطلق,Habits and facts.,عادت اور حقائق۔,true\n",
+            ImportEntityKind.Rules => "RuleCode,RuleNameEn,RuleNameUr,Code,NameEn,NameUr,ExplanationEn,ExplanationUr,SortOrder,IsActive\nTENSE,Tense,زمانہ,PRESENT_SIMPLE,Simple Present,حال مطلق,Habits and facts.,عادت اور حقائق۔,20,true\n",
             ImportEntityKind.Sentences => "GradeCode,TextEn,TextUr,Difficulty,Status,RuleCodes\nG5,I walked to school.,میں اسکول گیا۔,Easy,Draft,PAST_SIMPLE\n",
             _ => throw new ArgumentOutOfRangeException(nameof(kind))
         };
@@ -43,8 +43,8 @@ public class ImportService
             },
             ImportEntityKind.Rules => new[]
             {
-                new[] { "CategoryCode", "CategoryNameEn", "CategoryNameUr", "Code", "NameEn", "NameUr", "ExplanationEn", "ExplanationUr", "IsActive" },
-                new[] { "TENSE", "Tense", "زمانہ", "PRESENT_SIMPLE", "Simple Present", "حال مطلق", "Habits and facts.", "عادت اور حقائق۔", "true" }
+                new[] { "RuleCode", "RuleNameEn", "RuleNameUr", "Code", "NameEn", "NameUr", "ExplanationEn", "ExplanationUr", "SortOrder", "IsActive" },
+                new[] { "TENSE", "Tense", "زمانہ", "PRESENT_SIMPLE", "Simple Present", "حال مطلق", "Habits and facts.", "عادت اور حقائق۔", "20", "true" }
             },
             ImportEntityKind.Sentences => new[]
             {
@@ -280,16 +280,14 @@ public class ImportService
             var rn = int.Parse(row["__row"]!, CultureInfo.InvariantCulture);
             var nameEn = Get(row, "NameEn");
             var code = Get(row, "Code");
-            var catName = Get(row, "CategoryNameEn");
-            var catCode = Get(row, "CategoryCode");
+            var ruleName = Get(row, "RuleNameEn") ?? Get(row, "CategoryNameEn");
+            var ruleCode = Get(row, "RuleCode") ?? Get(row, "CategoryCode");
             if (string.IsNullOrWhiteSpace(nameEn))
                 errors.Add(new ImportRowError(rn, "NameEn", "NameEn is required."));
-            if (string.IsNullOrWhiteSpace(code))
-                errors.Add(new ImportRowError(rn, "Code", "Code is required for rule items."));
-            else if (!seenCodes.Add(code))
+            if (!string.IsNullOrWhiteSpace(code) && !seenCodes.Add(code))
                 errors.Add(new ImportRowError(rn, "Code", $"Duplicate Code '{code}' in file."));
-            if (string.IsNullOrWhiteSpace(catName) && string.IsNullOrWhiteSpace(catCode))
-                errors.Add(new ImportRowError(rn, "CategoryNameEn", "CategoryNameEn or CategoryCode is required."));
+            if (string.IsNullOrWhiteSpace(ruleName) && string.IsNullOrWhiteSpace(ruleCode))
+                errors.Add(new ImportRowError(rn, "RuleNameEn", "RuleNameEn or RuleCode is required."));
             preview.Add(row);
         }
     }
@@ -302,7 +300,7 @@ public class ImportService
         CancellationToken ct)
     {
         var grades = await _db.Grades.AsNoTracking().ToListAsync(ct);
-        var rules = await _db.RuleItems.AsNoTracking().Where(r => r.Code != null).ToListAsync(ct);
+        var rules = await _db.RuleDetails.AsNoTracking().Where(r => r.Code != null).ToListAsync(ct);
         var gradeByCode = grades.Where(g => g.Code != null)
             .ToDictionary(g => g.Code!, g => g, StringComparer.OrdinalIgnoreCase);
         var gradeByName = grades.ToDictionary(g => g.NameEn, g => g, StringComparer.OrdinalIgnoreCase);
@@ -385,47 +383,51 @@ public class ImportService
         var count = 0;
         foreach (var row in rows)
         {
-            var catCode = Get(row, "CategoryCode");
-            var catNameEn = Get(row, "CategoryNameEn") ?? catCode ?? "General";
-            RuleCategory? category = null;
-            if (!string.IsNullOrWhiteSpace(catCode))
-                category = await _db.RuleCategories.FirstOrDefaultAsync(c => c.Code == catCode, ct);
-            if (category is null)
-                category = await _db.RuleCategories.FirstOrDefaultAsync(c => c.NameEn == catNameEn, ct);
-            if (category is null)
+            var ruleCode = Get(row, "RuleCode") ?? Get(row, "CategoryCode");
+            var ruleNameEn = Get(row, "RuleNameEn") ?? Get(row, "CategoryNameEn") ?? ruleCode ?? "General";
+            Rule? rule = null;
+            if (!string.IsNullOrWhiteSpace(ruleCode))
+                rule = await _db.Rules.FirstOrDefaultAsync(r => r.Code == ruleCode, ct);
+            if (rule is null)
+                rule = await _db.Rules.FirstOrDefaultAsync(r => r.NameEn == ruleNameEn, ct);
+            if (rule is null)
             {
-                category = new RuleCategory
+                rule = new Rule
                 {
-                    Code = string.IsNullOrWhiteSpace(catCode) ? null : catCode.Trim(),
-                    NameEn = catNameEn.Trim(),
-                    NameUr = Get(row, "CategoryNameUr"),
+                    Code = string.IsNullOrWhiteSpace(ruleCode) ? null : ruleCode.Trim(),
+                    NameEn = ruleNameEn.Trim(),
+                    NameUr = Get(row, "RuleNameUr") ?? Get(row, "CategoryNameUr"),
                     IsActive = true,
                     CreatedAtUtc = DateTime.UtcNow,
                     CreatedByUserId = userId
                 };
-                _db.RuleCategories.Add(category);
+                _db.Rules.Add(rule);
                 await _db.SaveChangesAsync(ct);
             }
 
-            var code = Get(row, "Code")!;
-            var existing = await _db.RuleItems.FirstOrDefaultAsync(r => r.Code == code, ct);
+            var code = Get(row, "Code");
+            RuleDetail? existing = null;
+            if (!string.IsNullOrWhiteSpace(code))
+                existing = await _db.RuleDetails.FirstOrDefaultAsync(r => r.Code == code, ct);
             if (existing is null)
             {
-                existing = new RuleItem
+                existing = new RuleDetail
                 {
-                    Code = code,
-                    CategoryId = category.Id,
+                    Code = string.IsNullOrWhiteSpace(code) ? null : code.Trim(),
+                    RuleId = rule.Id,
                     CreatedAtUtc = DateTime.UtcNow,
                     CreatedByUserId = userId
                 };
-                _db.RuleItems.Add(existing);
+                _db.RuleDetails.Add(existing);
             }
 
-            existing.CategoryId = category.Id;
+            existing.RuleId = rule.Id;
             existing.NameEn = Get(row, "NameEn")!;
             existing.NameUr = Get(row, "NameUr");
             existing.ExplanationEn = Get(row, "ExplanationEn");
             existing.ExplanationUr = Get(row, "ExplanationUr");
+            if (int.TryParse(Get(row, "SortOrder"), out var sortOrder))
+                existing.SortOrder = sortOrder;
             existing.IsActive = ParseBool(Get(row, "IsActive"), true);
             existing.UpdatedAtUtc = DateTime.UtcNow;
             count++;
@@ -441,7 +443,7 @@ public class ImportService
         CancellationToken ct)
     {
         var grades = await _db.Grades.ToListAsync(ct);
-        var rules = await _db.RuleItems.Where(r => r.Code != null).ToListAsync(ct);
+        var rules = await _db.RuleDetails.Where(r => r.Code != null).ToListAsync(ct);
         var gradeByCode = grades.Where(g => g.Code != null)
             .ToDictionary(g => g.Code!, g => g, StringComparer.OrdinalIgnoreCase);
         var gradeByName = grades.ToDictionary(g => g.NameEn, g => g, StringComparer.OrdinalIgnoreCase);
@@ -482,7 +484,7 @@ public class ImportService
             {
                 if (ruleByCode.TryGetValue(code, out var rule))
                 {
-                    _db.SentenceRules.Add(new SentenceRule { SentenceId = sentence.Id, RuleItemId = rule.Id });
+                    _db.SentenceRules.Add(new SentenceRule { SentenceId = sentence.Id, RuleDetailId = rule.Id });
                 }
             }
             await _db.SaveChangesAsync(ct);

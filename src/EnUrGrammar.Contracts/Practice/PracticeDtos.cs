@@ -16,8 +16,8 @@ public sealed record PracticeRuleOptionDto(
     string NameEn,
     string? NameUr,
     string? Code,
-    int CategoryId,
-    string CategoryNameEn,
+    int RuleId,
+    string RuleNameEn,
     IReadOnlyList<int> GradeIds);
 
 public sealed record StartPracticeSessionRequest(

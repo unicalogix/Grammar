@@ -1,6 +1,6 @@
 import { Component, OnInit, computed, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { ContentService, GradeDto, RuleDto } from '../services/content.service';
+import { ContentService, GradeDto, RuleDetailDto } from '../services/content.service';
 import {
   SavedTest,
   SavedTestSummary,
@@ -100,7 +100,7 @@ const EXERCISE_OPTIONS: { value: number; label: string }[] = [
                   [checked]="form.ruleIds.includes(r.id)"
                   (change)="toggleRule(r.id)"
                 />
-                <span>{{ r.categoryNameEn }} · {{ r.nameEn }}</span>
+                <span>{{ r.ruleNameEn }} · {{ r.nameEn }}</span>
               </label>
             }
           </div>
@@ -218,7 +218,7 @@ export class AdminTestsPage implements OnInit {
   readonly exerciseOptions = EXERCISE_OPTIONS;
   readonly tests = signal<SavedTestSummary[]>([]);
   readonly grades = signal<GradeDto[]>([]);
-  readonly rules = signal<RuleDto[]>([]);
+  readonly rules = signal<RuleDetailDto[]>([]);
   readonly editing = signal(false);
   readonly busy = signal(false);
   readonly error = signal<string | null>(null);
@@ -240,7 +240,7 @@ export class AdminTestsPage implements OnInit {
   ngOnInit(): void {
     this.reload();
     this.content.listGrades().subscribe({ next: (g) => this.grades.set(g) });
-    this.content.listRules().subscribe({ next: (r) => this.rules.set(r) });
+    this.content.listRuleDetails().subscribe({ next: (r) => this.rules.set(r) });
   }
 
   layoutLabel(t: SavedTestSummary): string {

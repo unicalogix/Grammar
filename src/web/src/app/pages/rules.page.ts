@@ -1,8 +1,8 @@
 import { Component, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { ContentService, RuleCategoryDto } from '../services/content.service';
+import { ContentService, RuleDto } from '../services/content.service';
 
-interface ItemForm {
+interface DetailForm {
   id?: number;
   code: string;
   nameEn: string;
@@ -20,16 +20,17 @@ interface ItemForm {
   template: `
     <div class="head">
       <h2>Rules</h2>
-      <button type="button" (click)="startNew()">New category</button>
+      <button type="button" (click)="startNew()">New rule</button>
     </div>
     <p class="lede">
-      Categories group rule items (e.g. <em>Tense</em> → Simple Present, Present Continuous).
-      Sentences and grid dropdowns link to <strong>items</strong>, not categories.
+      Each <em>Rule</em> is a master (e.g. Types of Speech, Tense) with detail rows
+      (Direct Speech, Indirect Speech). Sentences and recognition dropdowns link to
+      <strong>details</strong>.
     </p>
 
     @if (editing()) {
       <section class="form wide">
-        <h3>{{ form.id ? 'Edit' : 'New' }} category</h3>
+        <h3>{{ form.id ? 'Edit' : 'New' }} rule</h3>
         <div class="row2">
           <label>Code<input [(ngModel)]="form.code" placeholder="TENSE" /></label>
           <label>Sort<input type="number" [(ngModel)]="form.sortOrder" /></label>
@@ -39,18 +40,18 @@ interface ItemForm {
         <label class="check"><input type="checkbox" [(ngModel)]="form.isActive" /> Active</label>
 
         <fieldset class="items">
-          <legend>Items</legend>
-          @for (item of form.items; track $index) {
+          <legend>Details</legend>
+          @for (item of form.details; track $index) {
             <div class="item-row">
               <label>Code<input [(ngModel)]="item.code" [name]="'code'+$index" placeholder="PRESENT_SIMPLE" /></label>
               <label>Name EN<input [(ngModel)]="item.nameEn" [name]="'nen'+$index" /></label>
               <label>Name UR<input [(ngModel)]="item.nameUr" [name]="'nur'+$index" dir="rtl" /></label>
               <label>Sort<input type="number" [(ngModel)]="item.sortOrder" [name]="'so'+$index" /></label>
               <label class="check"><input type="checkbox" [(ngModel)]="item.isActive" [name]="'ia'+$index" /> Active</label>
-              <button type="button" class="ghost danger" (click)="removeItem($index)">Remove</button>
+              <button type="button" class="ghost danger" (click)="removeDetail($index)">Remove</button>
             </div>
           }
-          <button type="button" class="ghost" (click)="addItem()">Add item</button>
+          <button type="button" class="ghost" (click)="addDetail()">Add detail</button>
         </fieldset>
 
         <div class="actions">
@@ -62,23 +63,23 @@ interface ItemForm {
 
     @if (error()) { <p class="error">{{ error() }}</p> }
 
-    @for (c of categories(); track c.id) {
+    @for (r of rules(); track r.id) {
       <section class="cat">
         <div class="cat-head">
           <div>
-            <h3>{{ c.nameEn }} <span class="muted" dir="rtl">{{ c.nameUr }}</span></h3>
-            <p class="muted small">{{ c.code || '—' }} · {{ c.isActive ? 'active' : 'inactive' }} · {{ c.items.length }} items</p>
+            <h3>{{ r.nameEn }} <span class="muted" dir="rtl">{{ r.nameUr }}</span></h3>
+            <p class="muted small">{{ r.code || '—' }} · {{ r.isActive ? 'active' : 'inactive' }} · {{ r.details.length }} details</p>
           </div>
-          <button type="button" class="ghost" (click)="edit(c)">Edit</button>
+          <button type="button" class="ghost" (click)="edit(r)">Edit</button>
         </div>
         <table>
           <thead><tr><th>Code</th><th>Name</th><th>Active</th></tr></thead>
           <tbody>
-            @for (i of c.items; track i.id) {
+            @for (d of r.details; track d.id) {
               <tr>
-                <td>{{ i.code || '—' }}</td>
-                <td>{{ i.nameEn }} <span class="muted" dir="rtl">{{ i.nameUr }}</span></td>
-                <td>{{ i.isActive ? 'yes' : 'no' }}</td>
+                <td>{{ d.code || '—' }}</td>
+                <td>{{ d.nameEn }} <span class="muted" dir="rtl">{{ d.nameUr }}</span></td>
+                <td>{{ d.isActive ? 'yes' : 'no' }}</td>
               </tr>
             }
           </tbody>
@@ -110,7 +111,7 @@ interface ItemForm {
   `]
 })
 export class RulesPage implements OnInit {
-  readonly categories = signal<RuleCategoryDto[]>([]);
+  readonly rules = signal<RuleDto[]>([]);
   readonly editing = signal(false);
   readonly busy = signal(false);
   readonly error = signal<string | null>(null);
@@ -122,69 +123,69 @@ export class RulesPage implements OnInit {
 
   startNew(): void {
     this.form = this.empty();
-    this.form.items = [this.emptyItem()];
+    this.form.details = [this.emptyDetail()];
     this.editing.set(true);
   }
 
-  edit(c: RuleCategoryDto): void {
+  edit(r: RuleDto): void {
     this.form = {
-      id: c.id,
-      code: c.code ?? '',
-      nameEn: c.nameEn,
-      nameUr: c.nameUr ?? '',
-      sortOrder: c.sortOrder,
-      isActive: c.isActive,
-      items: c.items.map((i) => ({
-        id: i.id,
-        code: i.code ?? '',
-        nameEn: i.nameEn,
-        nameUr: i.nameUr ?? '',
+      id: r.id,
+      code: r.code ?? '',
+      nameEn: r.nameEn,
+      nameUr: r.nameUr ?? '',
+      sortOrder: r.sortOrder,
+      isActive: r.isActive,
+      details: r.details.map((d) => ({
+        id: d.id,
+        code: d.code ?? '',
+        nameEn: d.nameEn,
+        nameUr: d.nameUr ?? '',
         explanationEn: '',
         explanationUr: '',
-        sortOrder: i.sortOrder,
-        isActive: i.isActive
+        sortOrder: d.sortOrder,
+        isActive: d.isActive
       }))
     };
     this.editing.set(true);
   }
 
-  addItem(): void {
-    this.form.items = [...this.form.items, this.emptyItem(this.form.items.length * 10 + 10)];
+  addDetail(): void {
+    this.form.details = [...this.form.details, this.emptyDetail(this.form.details.length * 10 + 10)];
   }
 
-  removeItem(index: number): void {
-    const items = [...this.form.items];
-    items.splice(index, 1);
-    this.form.items = items;
+  removeDetail(index: number): void {
+    const details = [...this.form.details];
+    details.splice(index, 1);
+    this.form.details = details;
   }
 
   save(): void {
     if (!this.form.nameEn.trim()) {
-      this.error.set('Category name is required.');
+      this.error.set('Rule name is required.');
       return;
     }
-    const items = this.form.items.filter((i) => i.nameEn.trim());
-    if (items.length === 0) {
-      this.error.set('Add at least one rule item.');
+    const details = this.form.details.filter((d) => d.nameEn.trim());
+    if (details.length === 0) {
+      this.error.set('Add at least one rule detail.');
       return;
     }
     this.busy.set(true);
     this.error.set(null);
-    this.api.saveRuleCategory({
+    this.api.saveRule({
       nameEn: this.form.nameEn.trim(),
       nameUr: this.form.nameUr.trim() || null,
       code: this.form.code.trim() || null,
       sortOrder: this.form.sortOrder,
       isActive: this.form.isActive,
-      items: items.map((i) => ({
-        id: i.id ?? null,
-        nameEn: i.nameEn.trim(),
-        nameUr: i.nameUr.trim() || null,
-        explanationEn: i.explanationEn.trim() || null,
-        explanationUr: i.explanationUr.trim() || null,
-        code: i.code.trim() || null,
-        sortOrder: i.sortOrder,
-        isActive: i.isActive
+      details: details.map((d) => ({
+        id: d.id ?? null,
+        nameEn: d.nameEn.trim(),
+        nameUr: d.nameUr.trim() || null,
+        explanationEn: d.explanationEn.trim() || null,
+        explanationUr: d.explanationUr.trim() || null,
+        code: d.code.trim() || null,
+        sortOrder: d.sortOrder,
+        isActive: d.isActive
       }))
     }, this.form.id).subscribe({
       next: () => {
@@ -200,8 +201,8 @@ export class RulesPage implements OnInit {
   }
 
   private reload(): void {
-    this.api.listRuleCategories().subscribe({
-      next: (rows) => this.categories.set(rows),
+    this.api.listRules().subscribe({
+      next: (rows) => this.rules.set(rows),
       error: (e) => this.error.set(e?.error?.error ?? 'Could not load rules.')
     });
   }
@@ -214,11 +215,11 @@ export class RulesPage implements OnInit {
       nameUr: '',
       sortOrder: 0,
       isActive: true,
-      items: [] as ItemForm[]
+      details: [] as DetailForm[]
     };
   }
 
-  private emptyItem(sortOrder = 0): ItemForm {
+  private emptyDetail(sortOrder = 0): DetailForm {
     return {
       code: '',
       nameEn: '',

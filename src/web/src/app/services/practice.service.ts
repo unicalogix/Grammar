@@ -18,8 +18,8 @@ export interface PracticeRuleOption {
   nameEn: string;
   nameUr: string | null;
   code: string | null;
-  categoryId: number;
-  categoryNameEn: string;
+  ruleId: number;
+  ruleNameEn: string;
   gradeIds: number[];
 }
 

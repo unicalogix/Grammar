@@ -1,6 +1,6 @@
 import { Component, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { ContentService, GradeDto, RuleDto, SentenceDto } from '../services/content.service';
+import { ContentService, GradeDto, RuleDetailDto, SentenceDto } from '../services/content.service';
 
 @Component({
   standalone: true,
@@ -66,7 +66,7 @@ import { ContentService, GradeDto, RuleDto, SentenceDto } from '../services/cont
         <label>Rules
           <select multiple [(ngModel)]="form.ruleIds" size="4">
             @for (r of rules(); track r.id) {
-              <option [ngValue]="r.id">{{ r.categoryNameEn }} · {{ r.nameEn }}</option>
+              <option [ngValue]="r.id">{{ r.ruleNameEn }} · {{ r.nameEn }}</option>
             }
           </select>
         </label>
@@ -117,7 +117,7 @@ import { ContentService, GradeDto, RuleDto, SentenceDto } from '../services/cont
 })
 export class SentencesPage implements OnInit {
   readonly grades = signal<GradeDto[]>([]);
-  readonly rules = signal<RuleDto[]>([]);
+  readonly rules = signal<RuleDetailDto[]>([]);
   readonly sentences = signal<SentenceDto[]>([]);
   readonly editing = signal(false);
   readonly busy = signal(false);
@@ -138,7 +138,7 @@ export class SentencesPage implements OnInit {
         if (!this.form.gradeId && g.length) this.form.gradeId = g[0].id;
       }
     });
-    this.api.listRules().subscribe({ next: (r) => this.rules.set(r) });
+    this.api.listRuleDetails().subscribe({ next: (r) => this.rules.set(r) });
     this.reload();
   }
 

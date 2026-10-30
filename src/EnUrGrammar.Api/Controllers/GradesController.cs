@@ -97,13 +97,13 @@ public class GradesController : ControllerBase
         if (entity is null) return NotFound();
 
         var ruleIds = (req.RuleIds ?? []).Distinct().ToList();
-        var existingRules = await _db.RuleItems.Where(r => ruleIds.Contains(r.Id)).Select(r => r.Id).ToListAsync(ct);
+        var existingRules = await _db.RuleDetails.Where(r => ruleIds.Contains(r.Id)).Select(r => r.Id).ToListAsync(ct);
         if (existingRules.Count != ruleIds.Count)
             return BadRequest(new { error = "One or more ruleIds are invalid." });
 
         _db.GradeRules.RemoveRange(entity.GradeRules);
         foreach (var rid in ruleIds)
-            entity.GradeRules.Add(new GradeRule { GradeId = id, RuleItemId = rid });
+            entity.GradeRules.Add(new GradeRule { GradeId = id, RuleDetailId = rid });
 
         entity.UpdatedAtUtc = DateTime.UtcNow;
         await _db.SaveChangesAsync(ct);
@@ -112,5 +112,5 @@ public class GradesController : ControllerBase
 
     private static GradeDto ToDto(Grade g) => new(
         g.Id, g.NameEn, g.NameUr, g.Code, g.SortOrder, g.IsActive,
-        g.GradeRules?.Select(gr => gr.RuleItemId).ToList() ?? []);
+        g.GradeRules?.Select(gr => gr.RuleDetailId).ToList() ?? []);
 }
