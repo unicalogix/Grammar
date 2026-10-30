@@ -4,7 +4,7 @@ English–Urdu grammar practice for school kids and self-learners. Teachers auth
 
 **Stack:** Angular 19 · ASP.NET Core 8 Web API · SQL Server · EF Core · JWT identity
 
-This repo ships **Phase 0–2b**: foundations, content/admin (CRUD + CSV/Excel import + MT stub), and **student practice** (MCQ, arrange, free-type, fill-in-the-blank, arrange with distractors, “which rules apply?”).
+This repo ships **Phase 0–2b + Saved Tests**: foundations, content/admin (CRUD + CSV/Excel import + MT stub), student practice (MCQ, arrange, free-type, fill-in-the-blank, arrange with distractors, “which rules apply?”), and **reusable saved tests** (grid dropdown or sequential layouts).
 
 ---
 
@@ -111,10 +111,19 @@ npm start
 
 Open [http://127.0.0.1:4317](http://127.0.0.1:4317). Dev traffic to `/api` is proxied to the API on port `5147`.
 
+### Try Saved Tests
+
+1. Sign in as **admin@enur.local** / `ChangeMe!Admin123`
+2. Open **Tests** — create a test (layout Sequential or Grid; for Grid pick Rules or Translation dropdowns; for Sequential pick exercise types; set grades/filters)
+3. Sign in as **student@enur.local** / `ChangeMe!Student123`
+4. Open **Practice** — take a seeded or newly saved test
+   - **Grid:** all questions on one page; dropdown → tick / cross; tap ✕ to reveal the correct answer
+   - **Sequential:** one question at a time (same exercise UIs as free practice)
+
 ### Try student practice (Phase 2a + 2b)
 
 1. Sign in as **student@enur.local** / `ChangeMe!Student123` (or admin/teacher to preview)
-2. Open **Practice** (home)
+2. Open **Practice** (home) → expand **Free practice setup**
 3. Select grade(s), optional rules, difficulty, prompt language (EN or UR)
 4. **Start practice** — items cycle through:
    - Multi-choice

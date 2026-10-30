@@ -48,6 +48,11 @@ export interface PracticeSession {
   endedAtUtc: string | null;
   emptyMessage: string | null;
   item: PracticeItem | null;
+  /** All items for Grid layout. */
+  items?: PracticeItem[] | null;
+  savedTestId?: number | null;
+  layout?: number | null;
+  testName?: string | null;
 }
 
 export interface AttemptResult {
@@ -58,6 +63,7 @@ export interface AttemptResult {
   studentAnswer: string;
   nextItem: PracticeItem | null;
   sessionComplete: boolean;
+  correctOptionIds?: number[] | null;
 }
 
 export interface StartPracticeRequest {

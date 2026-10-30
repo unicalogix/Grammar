@@ -136,6 +136,61 @@ public static class DbSeeder
             await db.SaveChangesAsync();
             logger.LogInformation("Seeded {Count} approved sample sentences for practice", samples.Length);
         }
+
+        // Saved Tests samples (grid + sequential) for admin/student try-out
+        if (!await db.SavedTests.AnyAsync())
+        {
+            db.SavedTests.Add(new SavedTest
+            {
+                Name = "Grade 5 · Rules grid",
+                Description = "Recognize which tense/rule applies — all questions on one page.",
+                Layout = TestLayout.Grid,
+                DropdownMode = DropdownMode.Rules,
+                ExerciseTypesJson = "[]",
+                GradeIdsJson = $"[{grade.Id}]",
+                RuleIdsJson = null,
+                Difficulty = null,
+                SourceLanguage = "en",
+                ItemCount = 6,
+                IsActive = true,
+                CreatedByUserId = admin.Id,
+                CreatedAtUtc = DateTime.UtcNow
+            });
+            db.SavedTests.Add(new SavedTest
+            {
+                Name = "Grade 5 · Translation grid",
+                Description = "Pick the correct translation from a dropdown for each sentence.",
+                Layout = TestLayout.Grid,
+                DropdownMode = DropdownMode.Translation,
+                ExerciseTypesJson = "[]",
+                GradeIdsJson = $"[{grade.Id}]",
+                RuleIdsJson = null,
+                Difficulty = null,
+                SourceLanguage = "en",
+                ItemCount = 6,
+                IsActive = true,
+                CreatedByUserId = admin.Id,
+                CreatedAtUtc = DateTime.UtcNow
+            });
+            db.SavedTests.Add(new SavedTest
+            {
+                Name = "Grade 5 · Blanks & arrange",
+                Description = "Sequential session with fill-blank and arrange-with-distractors only.",
+                Layout = TestLayout.Sequential,
+                DropdownMode = DropdownMode.None,
+                ExerciseTypesJson = "[4,5]",
+                GradeIdsJson = $"[{grade.Id}]",
+                RuleIdsJson = null,
+                Difficulty = null,
+                SourceLanguage = "en",
+                ItemCount = 6,
+                IsActive = true,
+                CreatedByUserId = admin.Id,
+                CreatedAtUtc = DateTime.UtcNow
+            });
+            await db.SaveChangesAsync();
+            logger.LogInformation("Seeded sample saved tests");
+        }
     }
 
     private static async Task EnsureRuleLinkedAsync(

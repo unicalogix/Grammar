@@ -11,6 +11,9 @@ public class PracticeSession
     /// <summary>Snapshot of filters + planned sentence/exercise sequence.</summary>
     public string? FilterJson { get; set; }
     public int ItemCount { get; set; }
+    /// <summary>When started from a saved test definition.</summary>
+    public int? SavedTestId { get; set; }
+    public SavedTest? SavedTest { get; set; }
 
     public ICollection<Attempt> Attempts { get; set; } = new List<Attempt>();
 }

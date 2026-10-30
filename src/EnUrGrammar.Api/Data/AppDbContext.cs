@@ -18,6 +18,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<ImportBatch> ImportBatches => Set<ImportBatch>();
     public DbSet<PracticeSession> PracticeSessions => Set<PracticeSession>();
     public DbSet<Attempt> Attempts => Set<Attempt>();
+    public DbSet<SavedTest> SavedTests => Set<SavedTest>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -95,6 +96,25 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
             e.Property(x => x.TargetLanguage).HasMaxLength(2).IsRequired().IsFixedLength();
             e.HasIndex(x => new { x.UserId, x.StartedAtUtc });
             e.HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.UserId)
+                .OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.SavedTest).WithMany().HasForeignKey(x => x.SavedTestId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        builder.Entity<SavedTest>(e =>
+        {
+            e.Property(x => x.Name).HasMaxLength(200).IsRequired();
+            e.Property(x => x.Description).HasMaxLength(1000);
+            e.Property(x => x.ExerciseTypesJson).HasMaxLength(200).IsRequired();
+            e.Property(x => x.GradeIdsJson).HasMaxLength(500).IsRequired();
+            e.Property(x => x.RuleIdsJson).HasMaxLength(500);
+            e.Property(x => x.SourceLanguage).HasMaxLength(2).IsRequired().IsFixedLength();
+            e.Property(x => x.CreatedByUserId).HasMaxLength(450).IsRequired();
+            e.Property(x => x.Layout).HasConversion<byte>();
+            e.Property(x => x.DropdownMode).HasConversion<byte>();
+            e.HasIndex(x => x.IsActive);
+            e.HasIndex(x => new { x.CreatedByUserId, x.CreatedAtUtc });
+            e.HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.CreatedByUserId)
                 .OnDelete(DeleteBehavior.Restrict);
         });
 

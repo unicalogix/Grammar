@@ -33,7 +33,12 @@ public sealed record PracticeSessionDto(
     DateTime StartedAtUtc,
     DateTime? EndedAtUtc,
     string? EmptyMessage,
-    PracticeItemDto? Item);
+    PracticeItemDto? Item,
+    /// <summary>All items for Grid layout; null/empty for Sequential (use Item).</summary>
+    IReadOnlyList<PracticeItemDto>? Items = null,
+    int? SavedTestId = null,
+    byte? Layout = null,
+    string? TestName = null);
 
 public sealed record PracticeItemDto(
     int SequenceNo,
@@ -67,4 +72,6 @@ public sealed record AttemptResultDto(
     string ExpectedAnswer,
     string StudentAnswer,
     PracticeItemDto? NextItem,
-    bool SessionComplete);
+    bool SessionComplete,
+    /// <summary>Correct option id(s) for grid rules dropdown (when wrong / reveal).</summary>
+    IReadOnlyList<int>? CorrectOptionIds = null);

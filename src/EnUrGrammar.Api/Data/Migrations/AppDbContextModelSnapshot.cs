@@ -304,6 +304,9 @@ namespace EnUrGrammar.Api.Data.Migrations
                     b.Property<int>("ItemCount")
                         .HasColumnType("int");
 
+                    b.Property<int?>("SavedTestId")
+                        .HasColumnType("int");
+
                     b.Property<string>("SourceLanguage")
                         .IsRequired()
                         .HasMaxLength(2)
@@ -325,6 +328,8 @@ namespace EnUrGrammar.Api.Data.Migrations
                         .HasColumnType("nvarchar(450)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("SavedTestId");
 
                     b.HasIndex("UserId", "StartedAtUtc");
 
@@ -381,6 +386,78 @@ namespace EnUrGrammar.Api.Data.Migrations
                     b.HasIndex("IsActive");
 
                     b.ToTable("Rules");
+                });
+
+            modelBuilder.Entity("EnUrGrammar.Api.Domain.SavedTest", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedByUserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<byte?>("Difficulty")
+                        .HasColumnType("tinyint");
+
+                    b.Property<byte>("DropdownMode")
+                        .HasColumnType("tinyint");
+
+                    b.Property<string>("ExerciseTypesJson")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("GradeIdsJson")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("ItemCount")
+                        .HasColumnType("int");
+
+                    b.Property<byte>("Layout")
+                        .HasColumnType("tinyint");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("RuleIdsJson")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("SourceLanguage")
+                        .IsRequired()
+                        .HasMaxLength(2)
+                        .HasColumnType("nchar(2)")
+                        .IsFixedLength();
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IsActive");
+
+                    b.HasIndex("CreatedByUserId", "CreatedAtUtc");
+
+                    b.ToTable("SavedTests");
                 });
 
             modelBuilder.Entity("EnUrGrammar.Api.Domain.Sentence", b =>
@@ -642,9 +719,25 @@ namespace EnUrGrammar.Api.Data.Migrations
 
             modelBuilder.Entity("EnUrGrammar.Api.Domain.PracticeSession", b =>
                 {
+                    b.HasOne("EnUrGrammar.Api.Domain.SavedTest", "SavedTest")
+                        .WithMany()
+                        .HasForeignKey("SavedTestId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("EnUrGrammar.Api.Domain.ApplicationUser", null)
                         .WithMany()
                         .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("SavedTest");
+                });
+
+            modelBuilder.Entity("EnUrGrammar.Api.Domain.SavedTest", b =>
+                {
+                    b.HasOne("EnUrGrammar.Api.Domain.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedByUserId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

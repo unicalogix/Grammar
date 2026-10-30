@@ -13,6 +13,7 @@ public class PracticeService
     public const int McqOptionCount = 4;
     public const int FillBlankOptionCount = 4;
     public const int RulesApplyOptionCount = 4;
+    public const int GridDropdownOptionCount = 4;
 
     private static readonly JsonSerializerOptions JsonOpts = new()
     {
@@ -27,7 +28,7 @@ public class PracticeService
         "my", "his", "her", "our", "their", "this", "that"
     };
 
-    private static readonly ExerciseType[] ExerciseCycle =
+    private static readonly ExerciseType[] DefaultExerciseCycle =
     [
         ExerciseType.MultiChoice,
         ExerciseType.Arrange,
@@ -75,9 +76,6 @@ public class PracticeService
         if (source is null)
             return (null!, "sourceLanguage must be 'en' or 'ur'.");
 
-        var target = source == "en" ? "ur" : "en";
-        var itemCount = Math.Clamp(req.ItemCount ?? DefaultItemCount, 1, MaxItemCount);
-
         Difficulty? difficulty = null;
         if (req.Difficulty is not null)
         {
@@ -86,8 +84,88 @@ public class PracticeService
             difficulty = (Difficulty)req.Difficulty.Value;
         }
 
+        var itemCount = Math.Clamp(req.ItemCount ?? DefaultItemCount, 1, MaxItemCount);
         var gradeIds = req.GradeIds.Distinct().ToList();
         var ruleIds = (req.RuleIds ?? []).Distinct().ToList();
+
+        return await StartInternalAsync(
+            userId,
+            gradeIds,
+            ruleIds,
+            difficulty,
+            source,
+            itemCount,
+            TestLayout.Sequential,
+            DropdownMode.None,
+            DefaultExerciseCycle,
+            savedTestId: null,
+            testName: null,
+            ct);
+    }
+
+    public async Task<(PracticeSessionDto? dto, string? error)> StartFromSavedTestAsync(
+        string userId, int savedTestId, CancellationToken ct)
+    {
+        var test = await _db.SavedTests.AsNoTracking()
+            .FirstOrDefaultAsync(t => t.Id == savedTestId && t.IsActive, ct);
+        if (test is null)
+            return (null, "Saved test not found.");
+
+        var gradeIds = SavedTestService.ParseIntList(test.GradeIdsJson);
+        if (gradeIds.Count == 0)
+            return (null, "Saved test has no grades configured.");
+
+        var ruleIds = SavedTestService.ParseIntList(test.RuleIdsJson);
+        var source = NormalizeLang(test.SourceLanguage) ?? "en";
+        Difficulty? difficulty = test.Difficulty is not null && Enum.IsDefined(typeof(Difficulty), test.Difficulty.Value)
+            ? (Difficulty)test.Difficulty.Value
+            : null;
+
+        ExerciseType[] cycle;
+        if (test.Layout == TestLayout.Grid)
+        {
+            cycle = [ExerciseType.GridDropdown];
+        }
+        else
+        {
+            var types = SavedTestService.ParseByteList(test.ExerciseTypesJson)
+                .Where(b => Enum.IsDefined(typeof(ExerciseType), b) && b != (byte)ExerciseType.GridDropdown)
+                .Select(b => (ExerciseType)b)
+                .Distinct()
+                .ToArray();
+            cycle = types.Length > 0 ? types : DefaultExerciseCycle;
+        }
+
+        return await StartInternalAsync(
+            userId,
+            gradeIds,
+            ruleIds,
+            difficulty,
+            source,
+            Math.Clamp(test.ItemCount, 1, MaxItemCount),
+            test.Layout,
+            test.DropdownMode,
+            cycle,
+            test.Id,
+            test.Name,
+            ct);
+    }
+
+    private async Task<(PracticeSessionDto dto, string? error)> StartInternalAsync(
+        string userId,
+        List<int> gradeIds,
+        List<int> ruleIds,
+        Difficulty? difficulty,
+        string source,
+        int itemCount,
+        TestLayout layout,
+        DropdownMode dropdownMode,
+        ExerciseType[] exerciseCycle,
+        int? savedTestId,
+        string? testName,
+        CancellationToken ct)
+    {
+        var target = source == "en" ? "ur" : "en";
 
         var q = _db.Sentences.AsNoTracking()
             .Where(s => !s.IsDeleted
@@ -100,13 +178,17 @@ public class PracticeService
         if (ruleIds.Count > 0)
             q = q.Where(s => s.SentenceRules.Any(sr => ruleIds.Contains(sr.RuleId)));
 
+        // Grid rules mode needs sentences that have at least one linked rule
+        if (layout == TestLayout.Grid && dropdownMode == DropdownMode.Rules)
+            q = q.Where(s => s.SentenceRules.Any());
+
         var pool = await q.Select(s => new { s.Id, s.TextEn, s.TextUr }).ToListAsync(ct);
         if (pool.Count == 0)
         {
             return (new PracticeSessionDto(
                 0, source, target, 0, DateTime.UtcNow, null,
                 "No approved sentences match these filters. Ask a teacher to approve content, or widen grades/rules/difficulty.",
-                null), null);
+                null, null, savedTestId, (byte)layout, testName), null);
         }
 
         var rng = Random.Shared;
@@ -115,7 +197,7 @@ public class PracticeService
         for (var i = 0; i < picked.Count; i++)
         {
             var s = picked[i];
-            var type = ExerciseCycle[i % ExerciseCycle.Length];
+            var type = exerciseCycle[i % exerciseCycle.Length];
             string? blankWord = null;
 
             if (type == ExerciseType.FillBlank)
@@ -132,8 +214,8 @@ public class PracticeService
         }
 
         var plan = new SessionPlan(
-            gradeIds, ruleIds, req.Difficulty, source, target,
-            planItems);
+            gradeIds, ruleIds, difficulty is null ? null : (byte)difficulty, source, target,
+            planItems, layout, dropdownMode, savedTestId, testName);
 
         var session = new PracticeSession
         {
@@ -142,14 +224,27 @@ public class PracticeService
             TargetLanguage = target,
             StartedAtUtc = DateTime.UtcNow,
             ItemCount = planItems.Count,
-            FilterJson = JsonSerializer.Serialize(plan, JsonOpts)
+            FilterJson = JsonSerializer.Serialize(plan, JsonOpts),
+            SavedTestId = savedTestId
         };
         _db.PracticeSessions.Add(session);
         await _db.SaveChangesAsync(ct);
 
+        if (layout == TestLayout.Grid)
+        {
+            var items = new List<PracticeItemDto>(planItems.Count);
+            for (var seq = 1; seq <= planItems.Count; seq++)
+                items.Add(await BuildItemAsync(session, plan, seq, ct));
+
+            return (new PracticeSessionDto(
+                session.Id, source, target, session.ItemCount, session.StartedAtUtc, null, null,
+                items.FirstOrDefault(), items, savedTestId, (byte)layout, testName), null);
+        }
+
         var first = await BuildItemAsync(session, plan, 1, ct);
         return (new PracticeSessionDto(
-            session.Id, source, target, session.ItemCount, session.StartedAtUtc, null, null, first), null);
+            session.Id, source, target, session.ItemCount, session.StartedAtUtc, null, null,
+            first, null, savedTestId, (byte)layout, testName), null);
     }
 
     public async Task<(AttemptResultDto? dto, string? error)> SubmitAttemptAsync(
@@ -169,9 +264,18 @@ public class PracticeService
         if (req.SequenceNo < 1 || req.SequenceNo > plan.Items.Count)
             return (null, "Invalid sequenceNo.");
 
-        var attempted = await _db.Attempts.CountAsync(a => a.PracticeSessionId == sessionId, ct);
-        if (req.SequenceNo != attempted + 1)
-            return (null, $"Expected sequenceNo {attempted + 1}.");
+        var already = await _db.Attempts.AnyAsync(
+            a => a.PracticeSessionId == sessionId && a.SequenceNo == req.SequenceNo, ct);
+        if (already)
+            return (null, "This item was already answered.");
+
+        var isGrid = plan.Layout == TestLayout.Grid;
+        if (!isGrid)
+        {
+            var attempted = await _db.Attempts.CountAsync(a => a.PracticeSessionId == sessionId, ct);
+            if (req.SequenceNo != attempted + 1)
+                return (null, $"Expected sequenceNo {attempted + 1}.");
+        }
 
         var planItem = plan.Items[req.SequenceNo - 1];
         if (planItem.SentenceId != req.SentenceId)
@@ -193,8 +297,24 @@ public class PracticeService
         string normExpected;
         string normStudent;
         string studentStored;
+        IReadOnlyList<int>? correctOptionIds = null;
 
-        if (planItem.ExerciseType == ExerciseType.RulesApply)
+        if (planItem.ExerciseType == ExerciseType.GridDropdown && plan.DropdownMode == DropdownMode.Rules)
+        {
+            var correctIds = sentence.SentenceRules.Select(sr => sr.RuleId).OrderBy(id => id).ToList();
+            correctOptionIds = correctIds;
+            var studentId = int.TryParse(studentRaw.Trim(), out var sid) ? sid : 0;
+            isCorrect = studentId > 0 && correctIds.Contains(studentId);
+            expectedStored = FormatRuleLabels(
+                sentence.SentenceRules
+                    .Where(sr => sr.Rule is not null)
+                    .Select(sr => sr.Rule!)
+                    .ToList());
+            studentStored = Truncate(studentRaw.Trim(), 500);
+            normExpected = string.Join(',', correctIds);
+            normStudent = studentId > 0 ? studentId.ToString() : "";
+        }
+        else if (planItem.ExerciseType == ExerciseType.RulesApply)
         {
             var correctIds = sentence.SentenceRules.Select(sr => sr.RuleId).OrderBy(id => id).ToList();
             var studentIds = ParseIdList(studentRaw);
@@ -216,6 +336,13 @@ public class PracticeService
             expectedStored = expectedFull;
             (isCorrect, normExpected, normStudent, studentStored) =
                 ScoreFillBlank(blank, studentRaw, plan.TargetLanguage);
+        }
+        else if (planItem.ExerciseType == ExerciseType.GridDropdown)
+        {
+            // Translation dropdown — same scoring as MCQ
+            expectedStored = expectedFull;
+            (isCorrect, normExpected, normStudent, studentStored) =
+                Score(ExerciseType.MultiChoice, expectedFull, studentRaw, plan.TargetLanguage);
         }
         else
         {
@@ -243,19 +370,21 @@ public class PracticeService
         await _db.SaveChangesAsync(ct);
 
         PracticeItemDto? next = null;
-        var complete = req.SequenceNo >= plan.Items.Count;
+        var answeredCount = await _db.Attempts.CountAsync(a => a.PracticeSessionId == sessionId, ct);
+        var complete = answeredCount >= plan.Items.Count;
         if (complete)
         {
             session.EndedAtUtc = DateTime.UtcNow;
             await _db.SaveChangesAsync(ct);
         }
-        else
+        else if (!isGrid)
         {
             next = await BuildItemAsync(session, plan, req.SequenceNo + 1, ct);
         }
 
         return (new AttemptResultDto(
-            attempt.Id, attempt.SequenceNo, isCorrect, expectedStored, attempt.StudentAnswer, next, complete), null);
+            attempt.Id, attempt.SequenceNo, isCorrect, expectedStored, attempt.StudentAnswer,
+            next, complete, correctOptionIds), null);
     }
 
     public async Task<(PracticeSessionDto? dto, string? error)> CompleteAsync(
@@ -267,9 +396,11 @@ public class PracticeService
             return (null, "Session not found.");
         session.EndedAtUtc ??= DateTime.UtcNow;
         await _db.SaveChangesAsync(ct);
+        var plan = DeserializePlan(session.FilterJson);
         return (new PracticeSessionDto(
             session.Id, session.SourceLanguage, session.TargetLanguage,
-            session.ItemCount, session.StartedAtUtc, session.EndedAtUtc, null, null), null);
+            session.ItemCount, session.StartedAtUtc, session.EndedAtUtc, null, null,
+            null, session.SavedTestId, plan is null ? null : (byte)plan.Layout, plan?.TestName), null);
     }
 
     private async Task<PracticeItemDto> BuildItemAsync(
@@ -315,6 +446,20 @@ public class PracticeService
                 optionIds = built.Ids;
                 break;
             }
+            case ExerciseType.GridDropdown:
+            {
+                if (plan.DropdownMode == DropdownMode.Rules)
+                {
+                    var built = await BuildGridRulesOptionsAsync(sentence, ct);
+                    options = built.Labels;
+                    optionIds = built.Ids;
+                }
+                else
+                {
+                    options = await BuildMcqOptionsAsync(expected, sentence.Id, plan.TargetLanguage, ct);
+                }
+                break;
+            }
         }
 
         return new PracticeItemDto(
@@ -327,6 +472,36 @@ public class PracticeService
             tokens,
             blankedText,
             optionIds);
+    }
+
+    private async Task<(IReadOnlyList<string> Labels, IReadOnlyList<int> Ids)> BuildGridRulesOptionsAsync(
+        Sentence sentence, CancellationToken ct)
+    {
+        var correctIds = sentence.SentenceRules.Select(sr => sr.RuleId).ToHashSet();
+        var correctRules = await _db.Rules.AsNoTracking()
+            .Where(r => r.IsActive && correctIds.Contains(r.Id))
+            .ToListAsync(ct);
+
+        // Include all linked rules as valid answers; pad with distractors to option count
+        var needDistractors = Math.Max(1, GridDropdownOptionCount - Math.Max(1, correctRules.Count));
+        // Prefer showing one correct + distractors when many rules linked (dropdown single-select)
+        // Keep all correct rules in the option set so any linked rule is selectable as correct.
+        var distractorPool = await _db.Rules.AsNoTracking()
+            .Where(r => r.IsActive && !correctIds.Contains(r.Id))
+            .ToListAsync(ct);
+        var distractors = distractorPool
+            .OrderBy(_ => Random.Shared.Next())
+            .Take(needDistractors)
+            .ToList();
+
+        var combined = correctRules.Concat(distractors)
+            .OrderBy(_ => Random.Shared.Next())
+            .ToList();
+
+        if (combined.Count == 0)
+            return (["(no rules linked)"], [0]);
+
+        return (combined.Select(FormatRuleLabel).ToList(), combined.Select(r => r.Id).ToList());
     }
 
     private async Task<IReadOnlyList<string>> BuildMcqOptionsAsync(
@@ -410,7 +585,6 @@ public class PracticeService
             .Take(distractorCount)
             .ToList();
 
-        // Guarantee 1–2 distractors even on thin pools
         var n = 1;
         while (extras.Count < distractorCount)
         {
@@ -440,7 +614,6 @@ public class PracticeService
             .Take(needDistractors)
             .ToList();
 
-        // If catalog is thin, still show correct rules alone
         var combined = correctRules.Concat(distractors)
             .OrderBy(_ => Random.Shared.Next())
             .ToList();
@@ -485,7 +658,6 @@ public class PracticeService
 
         if (candidates.Count == 0)
         {
-            // Prefer a middle token over the first
             for (var i = 1; i < tokens.Count; i++)
             {
                 var word = StripTokenPunct(tokens[i]);
@@ -505,7 +677,7 @@ public class PracticeService
     private static string ApplyBlank(string text, string blankWord)
     {
         var tokens = AnswerNormalization.Tokenize(text).ToList();
-        var blankNorm = AnswerNormalization.Normalize(blankWord, "en"); // case-fold for EN; UR normalize separately below
+        var blankNorm = AnswerNormalization.Normalize(blankWord, "en");
         for (var i = 0; i < tokens.Count; i++)
         {
             var stripped = StripTokenPunct(tokens[i]);
@@ -519,7 +691,6 @@ public class PracticeService
             }
         }
 
-        // Fallback: blank a middle token
         if (tokens.Count >= 2)
         {
             tokens[tokens.Count / 2] = "____";
@@ -610,7 +781,11 @@ public class PracticeService
         byte? Difficulty,
         string SourceLanguage,
         string TargetLanguage,
-        List<PlanItem> Items);
+        List<PlanItem> Items,
+        TestLayout Layout = TestLayout.Sequential,
+        DropdownMode DropdownMode = DropdownMode.None,
+        int? SavedTestId = null,
+        string? TestName = null);
 
     private sealed record PlanItem(
         int SentenceId,
