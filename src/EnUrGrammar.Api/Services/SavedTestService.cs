@@ -76,6 +76,8 @@ public class SavedTestService
         existing.RuleIdsJson = mapped.RuleIdsJson;
         existing.Difficulty = mapped.Difficulty;
         existing.SourceLanguage = mapped.SourceLanguage;
+        existing.ShowEnglish = mapped.ShowEnglish;
+        existing.ShowTranslation = mapped.ShowTranslation;
         existing.ItemCount = mapped.ItemCount;
         existing.IsActive = mapped.IsActive;
         existing.UpdatedAtUtc = DateTime.UtcNow;
@@ -123,9 +125,15 @@ public class SavedTestService
         if (req.GradeIds is null || req.GradeIds.Count == 0)
             return (null, "Select at least one grade.");
 
-        var source = NormalizeLang(req.SourceLanguage);
-        if (source is null)
-            return (null, "sourceLanguage must be 'en' or 'ur'.");
+        var showEnglish = req.ShowEnglish;
+        var showTranslation = req.ShowTranslation;
+        if (!showEnglish && !showTranslation)
+            return (null, "Select at least one prompt language (English and/or Translation).");
+
+        // Answer direction: English-only or both → en→ur; Translation-only → ur→en.
+        // Explicit sourceLanguage still wins when valid.
+        var source = NormalizeLang(req.SourceLanguage)
+                     ?? (showEnglish ? "en" : "ur");
 
         if (req.Difficulty is not null && !Enum.IsDefined(typeof(Difficulty), req.Difficulty.Value))
             return (null, "Difficulty must be 1 (Easy), 2 (Medium), or 3 (Hard).");
@@ -142,7 +150,6 @@ public class SavedTestService
         if (layout == TestLayout.Sequential && exerciseTypes.Count == 0)
             return (null, "Sequential tests need at least one exercise type.");
 
-        // Grid ignores exercise types for item generation; store empty or whatever was sent for display
         if (layout == TestLayout.Grid)
             exerciseTypes = [];
 
@@ -164,6 +171,8 @@ public class SavedTestService
         entity.RuleIdsJson = ruleIds.Count == 0 ? null : JsonSerializer.Serialize(ruleIds, JsonOpts);
         entity.Difficulty = req.Difficulty;
         entity.SourceLanguage = source;
+        entity.ShowEnglish = showEnglish;
+        entity.ShowTranslation = showTranslation;
         entity.ItemCount = itemCount;
         entity.IsActive = req.IsActive;
         if (existing is null)
@@ -209,6 +218,8 @@ public class SavedTestService
         ParseIntList(t.RuleIdsJson),
         t.Difficulty,
         t.SourceLanguage,
+        t.ShowEnglish,
+        t.ShowTranslation,
         t.ItemCount,
         t.IsActive,
         t.CreatedAtUtc,

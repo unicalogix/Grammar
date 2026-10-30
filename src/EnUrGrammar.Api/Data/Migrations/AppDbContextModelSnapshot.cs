@@ -221,12 +221,12 @@ namespace EnUrGrammar.Api.Data.Migrations
                     b.Property<int>("GradeId")
                         .HasColumnType("int");
 
-                    b.Property<int>("RuleId")
+                    b.Property<int>("RuleItemId")
                         .HasColumnType("int");
 
-                    b.HasKey("GradeId", "RuleId");
+                    b.HasKey("GradeId", "RuleItemId");
 
-                    b.HasIndex("RuleId");
+                    b.HasIndex("RuleItemId");
 
                     b.ToTable("GradeRules");
                 });
@@ -336,13 +336,65 @@ namespace EnUrGrammar.Api.Data.Migrations
                     b.ToTable("PracticeSessions");
                 });
 
-            modelBuilder.Entity("EnUrGrammar.Api.Domain.Rule", b =>
+            modelBuilder.Entity("EnUrGrammar.Api.Domain.RuleCategory", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int");
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Code")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedByUserId")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("NameEn")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("NameUr")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique()
+                        .HasFilter("[Code] IS NOT NULL");
+
+                    b.HasIndex("IsActive");
+
+                    b.HasIndex("SortOrder");
+
+                    b.ToTable("RuleCategories");
+                });
+
+            modelBuilder.Entity("EnUrGrammar.Api.Domain.RuleItem", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CategoryId")
+                        .HasColumnType("int");
 
                     b.Property<string>("Code")
                         .HasMaxLength(64)
@@ -374,6 +426,9 @@ namespace EnUrGrammar.Api.Data.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
                     b.Property<DateTime?>("UpdatedAtUtc")
                         .HasColumnType("datetime2");
 
@@ -385,7 +440,9 @@ namespace EnUrGrammar.Api.Data.Migrations
 
                     b.HasIndex("IsActive");
 
-                    b.ToTable("Rules");
+                    b.HasIndex("CategoryId", "SortOrder");
+
+                    b.ToTable("RuleItems");
                 });
 
             modelBuilder.Entity("EnUrGrammar.Api.Domain.SavedTest", b =>
@@ -441,6 +498,12 @@ namespace EnUrGrammar.Api.Data.Migrations
                     b.Property<string>("RuleIdsJson")
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
+
+                    b.Property<bool>("ShowEnglish")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("ShowTranslation")
+                        .HasColumnType("bit");
 
                     b.Property<string>("SourceLanguage")
                         .IsRequired()
@@ -530,12 +593,12 @@ namespace EnUrGrammar.Api.Data.Migrations
                     b.Property<int>("SentenceId")
                         .HasColumnType("int");
 
-                    b.Property<int>("RuleId")
+                    b.Property<int>("RuleItemId")
                         .HasColumnType("int");
 
-                    b.HasKey("SentenceId", "RuleId");
+                    b.HasKey("SentenceId", "RuleItemId");
 
-                    b.HasIndex("RuleId");
+                    b.HasIndex("RuleItemId");
 
                     b.ToTable("SentenceRules");
                 });
@@ -706,15 +769,15 @@ namespace EnUrGrammar.Api.Data.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("EnUrGrammar.Api.Domain.Rule", "Rule")
+                    b.HasOne("EnUrGrammar.Api.Domain.RuleItem", "RuleItem")
                         .WithMany("GradeRules")
-                        .HasForeignKey("RuleId")
+                        .HasForeignKey("RuleItemId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
                     b.Navigation("Grade");
 
-                    b.Navigation("Rule");
+                    b.Navigation("RuleItem");
                 });
 
             modelBuilder.Entity("EnUrGrammar.Api.Domain.PracticeSession", b =>
@@ -731,6 +794,17 @@ namespace EnUrGrammar.Api.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("SavedTest");
+                });
+
+            modelBuilder.Entity("EnUrGrammar.Api.Domain.RuleItem", b =>
+                {
+                    b.HasOne("EnUrGrammar.Api.Domain.RuleCategory", "Category")
+                        .WithMany("Items")
+                        .HasForeignKey("CategoryId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Category");
                 });
 
             modelBuilder.Entity("EnUrGrammar.Api.Domain.SavedTest", b =>
@@ -755,9 +829,9 @@ namespace EnUrGrammar.Api.Data.Migrations
 
             modelBuilder.Entity("EnUrGrammar.Api.Domain.SentenceRule", b =>
                 {
-                    b.HasOne("EnUrGrammar.Api.Domain.Rule", "Rule")
+                    b.HasOne("EnUrGrammar.Api.Domain.RuleItem", "RuleItem")
                         .WithMany()
-                        .HasForeignKey("RuleId")
+                        .HasForeignKey("RuleItemId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
@@ -767,7 +841,7 @@ namespace EnUrGrammar.Api.Data.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.Navigation("Rule");
+                    b.Navigation("RuleItem");
 
                     b.Navigation("Sentence");
                 });
@@ -835,7 +909,12 @@ namespace EnUrGrammar.Api.Data.Migrations
                     b.Navigation("Attempts");
                 });
 
-            modelBuilder.Entity("EnUrGrammar.Api.Domain.Rule", b =>
+            modelBuilder.Entity("EnUrGrammar.Api.Domain.RuleCategory", b =>
+                {
+                    b.Navigation("Items");
+                });
+
+            modelBuilder.Entity("EnUrGrammar.Api.Domain.RuleItem", b =>
                 {
                     b.Navigation("GradeRules");
                 });

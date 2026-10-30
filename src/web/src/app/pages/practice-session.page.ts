@@ -23,14 +23,26 @@ import { AttemptResult, PracticeItem, PracticeService, PracticeSession } from '.
           <span class="type">{{ exerciseLabel(item()!.exerciseType) }}</span>
         </div>
 
-        <p class="prompt-label">{{ item()!.promptLanguage === 'en' ? 'English' : 'Urdu' }}</p>
-        <p
-          class="prompt"
-          [attr.lang]="item()!.promptLanguage"
-          [attr.dir]="item()!.promptLanguage === 'ur' ? 'rtl' : 'ltr'"
-        >
-          {{ item()!.promptText }}
-        </p>
+        <div class="prompts">
+          @if (item()!.promptEnglish) {
+            <p class="prompt-label">English</p>
+            <p class="prompt" lang="en" dir="ltr">{{ item()!.promptEnglish }}</p>
+          }
+          @if (item()!.promptTranslation) {
+            <p class="prompt-label">Translation</p>
+            <p class="prompt ur" lang="ur" dir="rtl">{{ item()!.promptTranslation }}</p>
+          }
+          @if (!item()!.promptEnglish && !item()!.promptTranslation) {
+            <p class="prompt-label">{{ item()!.promptLanguage === 'en' ? 'English' : 'Urdu' }}</p>
+            <p
+              class="prompt"
+              [attr.lang]="item()!.promptLanguage"
+              [attr.dir]="item()!.promptLanguage === 'ur' ? 'rtl' : 'ltr'"
+            >
+              {{ item()!.promptText }}
+            </p>
+          }
+        </div>
 
         @if (!feedback()) {
           @if (item()!.exerciseType === 1 && item()!.options) {

@@ -64,7 +64,7 @@ import { SavedTestSummary, SavedTestsService } from '../services/saved-tests.ser
                 @for (r of filteredRules(); track r.id) {
                   <label class="chip">
                     <input type="checkbox" [checked]="selectedRules().has(r.id)" (change)="toggleRule(r.id)" />
-                    <span>{{ r.nameEn }}@if (r.code) { <code>{{ r.code }}</code> }</span>
+                    <span>{{ r.categoryNameEn }} · {{ r.nameEn }}@if (r.code) { <code>{{ r.code }}</code> }</span>
                   </label>
                 }
                 @if (filteredRules().length === 0) {

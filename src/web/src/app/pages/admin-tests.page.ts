@@ -91,7 +91,7 @@ const EXERCISE_OPTIONS: { value: number; label: string }[] = [
         </fieldset>
 
         <fieldset class="types">
-          <legend>Rules / tenses <span class="opt">(optional filter)</span></legend>
+          <legend>Rule items <span class="opt">(optional filter)</span></legend>
           <div class="chips">
             @for (r of filteredRules(); track r.id) {
               <label class="chip">
@@ -100,7 +100,7 @@ const EXERCISE_OPTIONS: { value: number; label: string }[] = [
                   [checked]="form.ruleIds.includes(r.id)"
                   (change)="toggleRule(r.id)"
                 />
-                <span>{{ r.nameEn }}</span>
+                <span>{{ r.categoryNameEn }} · {{ r.nameEn }}</span>
               </label>
             }
           </div>
@@ -116,13 +116,20 @@ const EXERCISE_OPTIONS: { value: number; label: string }[] = [
               <option [ngValue]="3">Hard</option>
             </select>
           </label>
-          <label>
-            Prompt language
-            <select [(ngModel)]="form.sourceLanguage">
-              <option value="en">English → Urdu</option>
-              <option value="ur">Urdu → English</option>
-            </select>
-          </label>
+          <fieldset class="types prompt-langs">
+            <legend>Prompt language</legend>
+            <div class="chips">
+              <label class="chip">
+                <input type="checkbox" [(ngModel)]="form.showEnglish" name="showEnglish" />
+                <span>English</span>
+              </label>
+              <label class="chip">
+                <input type="checkbox" [(ngModel)]="form.showTranslation" name="showTranslation" />
+                <span>Translation</span>
+              </label>
+            </div>
+            <p class="muted small">Controls what students see on each question. English is selected by default; pick both to show EN + UR.</p>
+          </fieldset>
           <label>
             Items
             <select [(ngModel)]="form.itemCount">
@@ -296,6 +303,8 @@ export class AdminTestsPage implements OnInit {
           ruleIds: [...t.ruleIds],
           difficulty: t.difficulty,
           sourceLanguage: t.sourceLanguage,
+          showEnglish: t.showEnglish,
+          showTranslation: t.showTranslation,
           itemCount: t.itemCount,
           isActive: t.isActive
         };
@@ -318,6 +327,10 @@ export class AdminTestsPage implements OnInit {
       this.error.set('Select at least one exercise type.');
       return;
     }
+    if (!this.form.showEnglish && !this.form.showTranslation) {
+      this.error.set('Select at least one prompt language (English and/or Translation).');
+      return;
+    }
     this.busy.set(true);
     this.error.set(null);
     const body: UpsertSavedTestRequest = {
@@ -329,7 +342,9 @@ export class AdminTestsPage implements OnInit {
       gradeIds: this.form.gradeIds,
       ruleIds: this.form.ruleIds,
       difficulty: this.form.difficulty,
-      sourceLanguage: this.form.sourceLanguage,
+      sourceLanguage: this.form.showEnglish ? 'en' : 'ur',
+      showEnglish: this.form.showEnglish,
+      showTranslation: this.form.showTranslation,
       itemCount: this.form.itemCount,
       isActive: this.form.isActive
     };
@@ -376,6 +391,8 @@ export class AdminTestsPage implements OnInit {
       ruleIds: [] as number[],
       difficulty: null as number | null,
       sourceLanguage: 'en',
+      showEnglish: true,
+      showTranslation: false,
       itemCount: 8,
       isActive: true
     };

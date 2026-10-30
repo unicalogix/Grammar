@@ -45,13 +45,23 @@ interface GridRowState {
             <article class="q">
               <div class="q-head">
                 <span class="num">{{ row.item.sequenceNo }}</span>
-                <p
-                  class="prompt"
-                  [attr.lang]="row.item.promptLanguage"
-                  [attr.dir]="row.item.promptLanguage === 'ur' ? 'rtl' : 'ltr'"
-                >
-                  {{ row.item.promptText }}
-                </p>
+                <div class="prompts">
+                  @if (row.item.promptEnglish) {
+                    <p class="prompt" lang="en" dir="ltr">{{ row.item.promptEnglish }}</p>
+                  }
+                  @if (row.item.promptTranslation) {
+                    <p class="prompt ur" lang="ur" dir="rtl">{{ row.item.promptTranslation }}</p>
+                  }
+                  @if (!row.item.promptEnglish && !row.item.promptTranslation) {
+                    <p
+                      class="prompt"
+                      [attr.lang]="row.item.promptLanguage"
+                      [attr.dir]="row.item.promptLanguage === 'ur' ? 'rtl' : 'ltr'"
+                    >
+                      {{ row.item.promptText }}
+                    </p>
+                  }
+                </div>
                 @if (row.feedback) {
                   @if (row.feedback.isCorrect) {
                     <span class="mark ok" aria-label="Correct">✓</span>
@@ -122,14 +132,26 @@ interface GridRowState {
           </div>
         </header>
 
-        <p class="prompt-label">{{ item()!.promptLanguage === 'en' ? 'English' : 'Urdu' }}</p>
-        <p
-          class="prompt big"
-          [attr.lang]="item()!.promptLanguage"
-          [attr.dir]="item()!.promptLanguage === 'ur' ? 'rtl' : 'ltr'"
-        >
-          {{ item()!.promptText }}
-        </p>
+        <div class="prompts sequential">
+          @if (item()!.promptEnglish) {
+            <p class="prompt-label">English</p>
+            <p class="prompt big" lang="en" dir="ltr">{{ item()!.promptEnglish }}</p>
+          }
+          @if (item()!.promptTranslation) {
+            <p class="prompt-label">Translation</p>
+            <p class="prompt big ur" lang="ur" dir="rtl">{{ item()!.promptTranslation }}</p>
+          }
+          @if (!item()!.promptEnglish && !item()!.promptTranslation) {
+            <p class="prompt-label">{{ item()!.promptLanguage === 'en' ? 'English' : 'Urdu' }}</p>
+            <p
+              class="prompt big"
+              [attr.lang]="item()!.promptLanguage"
+              [attr.dir]="item()!.promptLanguage === 'ur' ? 'rtl' : 'ltr'"
+            >
+              {{ item()!.promptText }}
+            </p>
+          }
+        </div>
 
         @if (!feedback()) {
           @if (item()!.exerciseType === 1 && item()!.options) {

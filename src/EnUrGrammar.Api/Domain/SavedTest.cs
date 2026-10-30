@@ -16,10 +16,15 @@ public class SavedTest
     public string ExerciseTypesJson { get; set; } = "[]";
     /// <summary>JSON array of grade ids.</summary>
     public string GradeIdsJson { get; set; } = "[]";
-    /// <summary>JSON array of rule ids (optional filter).</summary>
+    /// <summary>JSON array of rule item ids (optional filter).</summary>
     public string? RuleIdsJson { get; set; }
     public byte? Difficulty { get; set; }
+    /// <summary>Answer direction: en→ur or ur→en. Derived from prompt checkboxes when saving.</summary>
     public string SourceLanguage { get; set; } = "en";
+    /// <summary>Show English sentence text on questions.</summary>
+    public bool ShowEnglish { get; set; } = true;
+    /// <summary>Show Urdu (translation) sentence text on questions.</summary>
+    public bool ShowTranslation { get; set; }
     public int ItemCount { get; set; } = 8;
     public bool IsActive { get; set; } = true;
     public string CreatedByUserId { get; set; } = string.Empty;

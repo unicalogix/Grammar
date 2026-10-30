@@ -16,6 +16,8 @@ public sealed record PracticeRuleOptionDto(
     string NameEn,
     string? NameUr,
     string? Code,
+    int CategoryId,
+    string CategoryNameEn,
     IReadOnlyList<int> GradeIds);
 
 public sealed record StartPracticeSessionRequest(
@@ -52,8 +54,14 @@ public sealed record PracticeItemDto(
     IReadOnlyList<string>? Tokens,
     /// <summary>Target sentence with ____ for FillBlank.</summary>
     string? BlankedText = null,
-    /// <summary>Rule ids parallel to Options for RulesApply multi-select.</summary>
-    IReadOnlyList<int>? OptionIds = null);
+    /// <summary>Rule item ids parallel to Options for RulesApply multi-select.</summary>
+    IReadOnlyList<int>? OptionIds = null,
+    /// <summary>English prompt when ShowEnglish; null when hidden.</summary>
+    string? PromptEnglish = null,
+    /// <summary>Urdu/translation prompt when ShowTranslation; null when hidden.</summary>
+    string? PromptTranslation = null,
+    bool ShowEnglish = true,
+    bool ShowTranslation = false);
 
 public sealed record SubmitAttemptRequest(
     int SequenceNo,

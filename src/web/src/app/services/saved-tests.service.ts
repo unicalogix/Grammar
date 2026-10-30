@@ -22,6 +22,8 @@ export interface SavedTest extends SavedTestSummary {
   ruleIds: number[];
   difficulty: number | null;
   sourceLanguage: string;
+  showEnglish: boolean;
+  showTranslation: boolean;
   createdAtUtc: string;
   updatedAtUtc: string | null;
 }
@@ -35,7 +37,9 @@ export interface UpsertSavedTestRequest {
   gradeIds: number[];
   ruleIds?: number[];
   difficulty?: number | null;
-  sourceLanguage: string;
+  sourceLanguage?: string | null;
+  showEnglish: boolean;
+  showTranslation: boolean;
   itemCount: number;
   isActive?: boolean;
 }

@@ -73,7 +73,7 @@ On startup the API:
 
 1. Applies EF Core migrations (including `PracticeSessions` / `Attempts`)
 2. Seeds roles `Admin`, `Teacher`, `Student`
-3. Seeds sample admin, student, Grade 5, `PAST_SIMPLE` rule, and approved practice sentences (if empty)
+3. Seeds sample admin, student, Grade 5, rule categories (**Tense**, **Direct and Indirect Speech**) with rule items, and approved practice sentences (if empty)
 
 ### Default seed credentials
 
@@ -114,7 +114,7 @@ Open [http://127.0.0.1:4317](http://127.0.0.1:4317). Dev traffic to `/api` is pr
 ### Try Saved Tests
 
 1. Sign in as **admin@enur.local** / `ChangeMe!Admin123`
-2. Open **Tests** — create a test (layout Sequential or Grid; for Grid pick Rules or Translation dropdowns; for Sequential pick exercise types; set grades/filters)
+2. Open **Tests** — create a test (layout Sequential or Grid; for Grid pick Rules or Translation dropdowns; for Sequential pick exercise types; set grades/filters; prompt language checkboxes: English and/or Translation)
 3. Sign in as **student@enur.local** / `ChangeMe!Student123`
 4. Open **Practice** — take a seeded or newly saved test
    - **Grid:** all questions on one page; dropdown → tick / cross; tap ✕ to reveal the correct answer
@@ -141,7 +141,7 @@ Open [http://127.0.0.1:4317](http://127.0.0.1:4317). Dev traffic to `/api` is pr
 
 1. Sign in as admin at http://127.0.0.1:4317/login
 2. Open **Import**
-3. Choose entity (Grades / Rules / Sentences) → **Download CSV template**
+3. Choose entity (Grades / Rules / Sentences) → **Download CSV template** (Rules CSV includes `CategoryCode` / `CategoryNameEn` columns for hierarchical items)
 4. Keep or edit the example row (sentences need existing `GradeCode` like `G5` and `RuleCodes` like `PAST_SIMPLE`)
 5. Upload → review validation errors → **Confirm commit** (defaults to Draft unless Status=Approved)
 

@@ -11,7 +11,8 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
     }
 
     public DbSet<Grade> Grades => Set<Grade>();
-    public DbSet<Rule> Rules => Set<Rule>();
+    public DbSet<RuleCategory> RuleCategories => Set<RuleCategory>();
+    public DbSet<RuleItem> RuleItems => Set<RuleItem>();
     public DbSet<GradeRule> GradeRules => Set<GradeRule>();
     public DbSet<Sentence> Sentences => Set<Sentence>();
     public DbSet<SentenceRule> SentenceRules => Set<SentenceRule>();
@@ -34,7 +35,17 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
             e.HasIndex(x => x.IsActive);
         });
 
-        builder.Entity<Rule>(e =>
+        builder.Entity<RuleCategory>(e =>
+        {
+            e.Property(x => x.NameEn).HasMaxLength(200).IsRequired();
+            e.Property(x => x.NameUr).HasMaxLength(200);
+            e.Property(x => x.Code).HasMaxLength(64);
+            e.HasIndex(x => x.Code).IsUnique().HasFilter("[Code] IS NOT NULL");
+            e.HasIndex(x => x.SortOrder);
+            e.HasIndex(x => x.IsActive);
+        });
+
+        builder.Entity<RuleItem>(e =>
         {
             e.Property(x => x.NameEn).HasMaxLength(200).IsRequired();
             e.Property(x => x.NameUr).HasMaxLength(200);
@@ -43,16 +54,19 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
             e.Property(x => x.Code).HasMaxLength(64);
             e.HasIndex(x => x.Code).IsUnique().HasFilter("[Code] IS NOT NULL");
             e.HasIndex(x => x.IsActive);
+            e.HasIndex(x => new { x.CategoryId, x.SortOrder });
+            e.HasOne(x => x.Category).WithMany(c => c.Items).HasForeignKey(x => x.CategoryId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         builder.Entity<GradeRule>(e =>
         {
-            e.HasKey(x => new { x.GradeId, x.RuleId });
+            e.HasKey(x => new { x.GradeId, x.RuleItemId });
             e.HasOne(x => x.Grade).WithMany(g => g.GradeRules).HasForeignKey(x => x.GradeId)
                 .OnDelete(DeleteBehavior.Cascade);
-            e.HasOne(x => x.Rule).WithMany(r => r.GradeRules).HasForeignKey(x => x.RuleId)
+            e.HasOne(x => x.RuleItem).WithMany(r => r.GradeRules).HasForeignKey(x => x.RuleItemId)
                 .OnDelete(DeleteBehavior.Cascade);
-            e.HasIndex(x => x.RuleId);
+            e.HasIndex(x => x.RuleItemId);
         });
 
         builder.Entity<Sentence>(e =>
@@ -71,12 +85,12 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
 
         builder.Entity<SentenceRule>(e =>
         {
-            e.HasKey(x => new { x.SentenceId, x.RuleId });
+            e.HasKey(x => new { x.SentenceId, x.RuleItemId });
             e.HasOne(x => x.Sentence).WithMany(s => s.SentenceRules).HasForeignKey(x => x.SentenceId)
                 .OnDelete(DeleteBehavior.Cascade);
-            e.HasOne(x => x.Rule).WithMany().HasForeignKey(x => x.RuleId)
+            e.HasOne(x => x.RuleItem).WithMany().HasForeignKey(x => x.RuleItemId)
                 .OnDelete(DeleteBehavior.Cascade);
-            e.HasIndex(x => x.RuleId);
+            e.HasIndex(x => x.RuleItemId);
         });
 
         builder.Entity<ImportBatch>(e =>

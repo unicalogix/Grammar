@@ -4,6 +4,6 @@ public class GradeRule
 {
     public int GradeId { get; set; }
     public Grade Grade { get; set; } = null!;
-    public int RuleId { get; set; }
-    public Rule Rule { get; set; } = null!;
+    public int RuleItemId { get; set; }
+    public RuleItem RuleItem { get; set; } = null!;
 }

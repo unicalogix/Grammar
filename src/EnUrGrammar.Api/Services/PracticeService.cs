@@ -53,14 +53,15 @@ public class PracticeService
             .Select(g => new PracticeGradeOptionDto(g.Id, g.NameEn, g.NameUr, g.Code, g.SortOrder))
             .ToListAsync(ct);
 
-        var rules = await _db.Rules.AsNoTracking()
-            .Where(r => r.IsActive)
+        var rules = await _db.RuleItems.AsNoTracking()
+            .Where(r => r.IsActive && r.Category.IsActive)
+            .Include(r => r.Category)
             .Include(r => r.GradeRules)
-            .OrderBy(r => r.NameEn)
+            .OrderBy(r => r.Category.SortOrder).ThenBy(r => r.SortOrder).ThenBy(r => r.NameEn)
             .ToListAsync(ct);
 
         var ruleDtos = rules.Select(r => new PracticeRuleOptionDto(
-            r.Id, r.NameEn, r.NameUr, r.Code,
+            r.Id, r.NameEn, r.NameUr, r.Code, r.CategoryId, r.Category.NameEn,
             r.GradeRules.Select(gr => gr.GradeId).ToList())).ToList();
 
         return new PracticeCatalogDto(grades, ruleDtos);
@@ -88,12 +89,17 @@ public class PracticeService
         var gradeIds = req.GradeIds.Distinct().ToList();
         var ruleIds = (req.RuleIds ?? []).Distinct().ToList();
 
+        // Free practice: show only the chosen source language as the prompt.
+        var showEn = source == "en";
+        var showUr = source == "ur";
         return await StartInternalAsync(
             userId,
             gradeIds,
             ruleIds,
             difficulty,
             source,
+            showEn,
+            showUr,
             itemCount,
             TestLayout.Sequential,
             DropdownMode.None,
@@ -116,7 +122,12 @@ public class PracticeService
             return (null, "Saved test has no grades configured.");
 
         var ruleIds = SavedTestService.ParseIntList(test.RuleIdsJson);
-        var source = NormalizeLang(test.SourceLanguage) ?? "en";
+        var showEnglish = test.ShowEnglish;
+        var showTranslation = test.ShowTranslation;
+        if (!showEnglish && !showTranslation)
+            showEnglish = true;
+        var source = NormalizeLang(test.SourceLanguage)
+                     ?? (showEnglish ? "en" : "ur");
         Difficulty? difficulty = test.Difficulty is not null && Enum.IsDefined(typeof(Difficulty), test.Difficulty.Value)
             ? (Difficulty)test.Difficulty.Value
             : null;
@@ -142,6 +153,8 @@ public class PracticeService
             ruleIds,
             difficulty,
             source,
+            showEnglish,
+            showTranslation,
             Math.Clamp(test.ItemCount, 1, MaxItemCount),
             test.Layout,
             test.DropdownMode,
@@ -157,6 +170,8 @@ public class PracticeService
         List<int> ruleIds,
         Difficulty? difficulty,
         string source,
+        bool showEnglish,
+        bool showTranslation,
         int itemCount,
         TestLayout layout,
         DropdownMode dropdownMode,
@@ -166,6 +181,8 @@ public class PracticeService
         CancellationToken ct)
     {
         var target = source == "en" ? "ur" : "en";
+        if (!showEnglish && !showTranslation)
+            showEnglish = source == "en";
 
         var q = _db.Sentences.AsNoTracking()
             .Where(s => !s.IsDeleted
@@ -176,7 +193,7 @@ public class PracticeService
             q = q.Where(s => s.Difficulty == difficulty);
 
         if (ruleIds.Count > 0)
-            q = q.Where(s => s.SentenceRules.Any(sr => ruleIds.Contains(sr.RuleId)));
+            q = q.Where(s => s.SentenceRules.Any(sr => ruleIds.Contains(sr.RuleItemId)));
 
         // Grid rules mode needs sentences that have at least one linked rule
         if (layout == TestLayout.Grid && dropdownMode == DropdownMode.Rules)
@@ -215,7 +232,7 @@ public class PracticeService
 
         var plan = new SessionPlan(
             gradeIds, ruleIds, difficulty is null ? null : (byte)difficulty, source, target,
-            planItems, layout, dropdownMode, savedTestId, testName);
+            planItems, layout, dropdownMode, savedTestId, testName, showEnglish, showTranslation);
 
         var session = new PracticeSession
         {
@@ -284,7 +301,7 @@ public class PracticeService
             return (null, "ExerciseType does not match the current item.");
 
         var sentence = await _db.Sentences.AsNoTracking()
-            .Include(s => s.SentenceRules).ThenInclude(sr => sr.Rule)
+            .Include(s => s.SentenceRules).ThenInclude(sr => sr.RuleItem)
             .FirstOrDefaultAsync(s => s.Id == planItem.SentenceId && !s.IsDeleted, ct);
         if (sentence is null)
             return (null, "Sentence not found.");
@@ -301,14 +318,14 @@ public class PracticeService
 
         if (planItem.ExerciseType == ExerciseType.GridDropdown && plan.DropdownMode == DropdownMode.Rules)
         {
-            var correctIds = sentence.SentenceRules.Select(sr => sr.RuleId).OrderBy(id => id).ToList();
+            var correctIds = sentence.SentenceRules.Select(sr => sr.RuleItemId).OrderBy(id => id).ToList();
             correctOptionIds = correctIds;
             var studentId = int.TryParse(studentRaw.Trim(), out var sid) ? sid : 0;
             isCorrect = studentId > 0 && correctIds.Contains(studentId);
             expectedStored = FormatRuleLabels(
                 sentence.SentenceRules
-                    .Where(sr => sr.Rule is not null)
-                    .Select(sr => sr.Rule!)
+                    .Where(sr => sr.RuleItem is not null)
+                    .Select(sr => sr.RuleItem!)
                     .ToList());
             studentStored = Truncate(studentRaw.Trim(), 500);
             normExpected = string.Join(',', correctIds);
@@ -316,15 +333,15 @@ public class PracticeService
         }
         else if (planItem.ExerciseType == ExerciseType.RulesApply)
         {
-            var correctIds = sentence.SentenceRules.Select(sr => sr.RuleId).OrderBy(id => id).ToList();
+            var correctIds = sentence.SentenceRules.Select(sr => sr.RuleItemId).OrderBy(id => id).ToList();
             var studentIds = ParseIdList(studentRaw);
             isCorrect = correctIds.Count > 0
                         && correctIds.Count == studentIds.Count
                         && correctIds.SequenceEqual(studentIds);
             expectedStored = FormatRuleLabels(
                 sentence.SentenceRules
-                    .Where(sr => sr.Rule is not null)
-                    .Select(sr => sr.Rule!)
+                    .Where(sr => sr.RuleItem is not null)
+                    .Select(sr => sr.RuleItem!)
                     .ToList());
             studentStored = Truncate(studentRaw.Trim(), 500);
             normExpected = string.Join(',', correctIds);
@@ -411,8 +428,17 @@ public class PracticeService
             .Include(s => s.SentenceRules)
             .FirstAsync(s => s.Id == planItem.SentenceId, ct);
 
-        var prompt = plan.SourceLanguage == "en" ? sentence.TextEn : sentence.TextUr;
         var expected = plan.TargetLanguage == "en" ? sentence.TextEn : sentence.TextUr;
+        var showEn = plan.ShowEnglish;
+        var showUr = plan.ShowTranslation;
+        if (!showEn && !showUr)
+            showEn = plan.SourceLanguage == "en";
+        string? promptEnglish = showEn ? sentence.TextEn : null;
+        string? promptTranslation = showUr ? sentence.TextUr : null;
+        // Primary promptText: prefer source language when shown, else the other.
+        var prompt = plan.SourceLanguage == "en"
+            ? (promptEnglish ?? promptTranslation ?? sentence.TextEn)
+            : (promptTranslation ?? promptEnglish ?? sentence.TextUr);
 
         IReadOnlyList<string>? options = null;
         IReadOnlyList<string>? tokens = null;
@@ -471,14 +497,18 @@ public class PracticeService
             options,
             tokens,
             blankedText,
-            optionIds);
+            optionIds,
+            promptEnglish,
+            promptTranslation,
+            showEn,
+            showUr);
     }
 
     private async Task<(IReadOnlyList<string> Labels, IReadOnlyList<int> Ids)> BuildGridRulesOptionsAsync(
         Sentence sentence, CancellationToken ct)
     {
-        var correctIds = sentence.SentenceRules.Select(sr => sr.RuleId).ToHashSet();
-        var correctRules = await _db.Rules.AsNoTracking()
+        var correctIds = sentence.SentenceRules.Select(sr => sr.RuleItemId).ToHashSet();
+        var correctRules = await _db.RuleItems.AsNoTracking()
             .Where(r => r.IsActive && correctIds.Contains(r.Id))
             .ToListAsync(ct);
 
@@ -486,7 +516,7 @@ public class PracticeService
         var needDistractors = Math.Max(1, GridDropdownOptionCount - Math.Max(1, correctRules.Count));
         // Prefer showing one correct + distractors when many rules linked (dropdown single-select)
         // Keep all correct rules in the option set so any linked rule is selectable as correct.
-        var distractorPool = await _db.Rules.AsNoTracking()
+        var distractorPool = await _db.RuleItems.AsNoTracking()
             .Where(r => r.IsActive && !correctIds.Contains(r.Id))
             .ToListAsync(ct);
         var distractors = distractorPool
@@ -600,13 +630,13 @@ public class PracticeService
     private async Task<(IReadOnlyList<string> Labels, IReadOnlyList<int> Ids)> BuildRulesApplyOptionsAsync(
         Sentence sentence, CancellationToken ct)
     {
-        var correctIds = sentence.SentenceRules.Select(sr => sr.RuleId).ToHashSet();
-        var correctRules = await _db.Rules.AsNoTracking()
+        var correctIds = sentence.SentenceRules.Select(sr => sr.RuleItemId).ToHashSet();
+        var correctRules = await _db.RuleItems.AsNoTracking()
             .Where(r => r.IsActive && correctIds.Contains(r.Id))
             .ToListAsync(ct);
 
         var needDistractors = Math.Max(1, RulesApplyOptionCount - Math.Max(1, correctRules.Count));
-        var distractorPool = await _db.Rules.AsNoTracking()
+        var distractorPool = await _db.RuleItems.AsNoTracking()
             .Where(r => r.IsActive && !correctIds.Contains(r.Id))
             .ToListAsync(ct);
         var distractors = distractorPool
@@ -748,10 +778,10 @@ public class PracticeService
             .ToList();
     }
 
-    private static string FormatRuleLabel(Rule r) =>
+    private static string FormatRuleLabel(RuleItem r) =>
         string.IsNullOrWhiteSpace(r.NameUr) ? r.NameEn : $"{r.NameEn} / {r.NameUr}";
 
-    private static string FormatRuleLabels(IReadOnlyList<Rule> rules) =>
+    private static string FormatRuleLabels(IReadOnlyList<RuleItem> rules) =>
         string.Join("; ", rules.OrderBy(r => r.NameEn).Select(FormatRuleLabel));
 
     private static string? NormalizeLang(string? raw)
@@ -785,7 +815,9 @@ public class PracticeService
         TestLayout Layout = TestLayout.Sequential,
         DropdownMode DropdownMode = DropdownMode.None,
         int? SavedTestId = null,
-        string? TestName = null);
+        string? TestName = null,
+        bool ShowEnglish = true,
+        bool ShowTranslation = false);
 
     private sealed record PlanItem(
         int SentenceId,

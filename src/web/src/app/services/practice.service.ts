@@ -18,6 +18,8 @@ export interface PracticeRuleOption {
   nameEn: string;
   nameUr: string | null;
   code: string | null;
+  categoryId: number;
+  categoryNameEn: string;
   gradeIds: number[];
 }
 
@@ -37,6 +39,10 @@ export interface PracticeItem {
   tokens: string[] | null;
   blankedText: string | null;
   optionIds: number[] | null;
+  promptEnglish?: string | null;
+  promptTranslation?: string | null;
+  showEnglish?: boolean;
+  showTranslation?: boolean;
 }
 
 export interface PracticeSession {

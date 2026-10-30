@@ -17,6 +17,8 @@ export interface GradeDto {
 
 export interface RuleDto {
   id: number;
+  categoryId: number;
+  categoryNameEn: string;
   nameEn: string;
   nameUr: string | null;
   explanationEn: string | null;
@@ -24,6 +26,25 @@ export interface RuleDto {
   code: string | null;
   isActive: boolean;
   gradeIds: number[];
+}
+
+export interface RuleItemSummaryDto {
+  id: number;
+  nameEn: string;
+  nameUr: string | null;
+  code: string | null;
+  sortOrder: number;
+  isActive: boolean;
+}
+
+export interface RuleCategoryDto {
+  id: number;
+  nameEn: string;
+  nameUr: string | null;
+  code: string | null;
+  sortOrder: number;
+  isActive: boolean;
+  items: RuleItemSummaryDto[];
 }
 
 export interface SentenceDto {
@@ -90,10 +111,48 @@ export class ContentService {
     return this.http.get<RuleDto[]>(`${base()}/rules`, { params });
   }
 
-  saveRule(body: Partial<RuleDto> & { nameEn: string; isActive: boolean }, id?: number): Observable<RuleDto> {
+  saveRule(
+    body: Partial<RuleDto> & { categoryId: number; nameEn: string; isActive: boolean },
+    id?: number
+  ): Observable<RuleDto> {
     return id
       ? this.http.put<RuleDto>(`${base()}/rules/${id}`, body)
       : this.http.post<RuleDto>(`${base()}/rules`, body);
+  }
+
+  listRuleCategories(activeOnly = false): Observable<RuleCategoryDto[]> {
+    let params = new HttpParams();
+    if (activeOnly) params = params.set('activeOnly', 'true');
+    return this.http.get<RuleCategoryDto[]>(`${base()}/rule-categories`, { params });
+  }
+
+  saveRuleCategory(
+    body: {
+      nameEn: string;
+      nameUr?: string | null;
+      code?: string | null;
+      sortOrder: number;
+      isActive: boolean;
+      items?: {
+        id?: number | null;
+        nameEn: string;
+        nameUr?: string | null;
+        explanationEn?: string | null;
+        explanationUr?: string | null;
+        code?: string | null;
+        sortOrder: number;
+        isActive: boolean;
+      }[];
+    },
+    id?: number
+  ): Observable<RuleCategoryDto> {
+    return id
+      ? this.http.put<RuleCategoryDto>(`${base()}/rule-categories/${id}`, body)
+      : this.http.post<RuleCategoryDto>(`${base()}/rule-categories`, body);
+  }
+
+  deactivateRuleCategory(id: number): Observable<void> {
+    return this.http.delete<void>(`${base()}/rule-categories/${id}`);
   }
 
   listSentences(filters: { gradeId?: number; status?: number; difficulty?: number; ruleId?: number } = {}): Observable<SentenceDto[]> {
