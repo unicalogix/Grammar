@@ -3,10 +3,12 @@
     <a routerLink="/" class="brand">EN–UR Grammar</a>
     @if (auth.user(); as u) {
       <nav>
+        <a routerLink="/practice" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }">Practice</a>
         @if (isAuthor()) {
           <a routerLink="/admin/sentences" routerLinkActive="active">Sentences</a>
           <a routerLink="/admin/grades" routerLinkActive="active">Grades</a>
           <a routerLink="/admin/rules" routerLinkActive="active">Rules</a>
+          <a routerLink="/admin/tests" routerLinkActive="active">Tests</a>
           <a routerLink="/admin/import" routerLinkActive="active">Import</a>
         }
       </nav>

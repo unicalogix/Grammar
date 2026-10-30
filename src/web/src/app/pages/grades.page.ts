@@ -1,6 +1,6 @@
 import { Component, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { ContentService, GradeDto, RuleDto } from '../services/content.service';
+import { ContentService, GradeDto, RuleDetailDto } from '../services/content.service';
 
 @Component({
   standalone: true,
@@ -23,7 +23,7 @@ import { ContentService, GradeDto, RuleDto } from '../services/content.service';
         <label>Linked rules
           <select multiple [(ngModel)]="form.ruleIds" size="4">
             @for (r of rules(); track r.id) {
-              <option [ngValue]="r.id">{{ r.code || r.nameEn }}</option>
+              <option [ngValue]="r.id">{{ r.ruleNameEn }} · {{ r.nameEn }}</option>
             }
           </select>
         </label>
@@ -55,7 +55,7 @@ import { ContentService, GradeDto, RuleDto } from '../services/content.service';
 })
 export class GradesPage implements OnInit {
   readonly grades = signal<GradeDto[]>([]);
-  readonly rules = signal<RuleDto[]>([]);
+  readonly rules = signal<RuleDetailDto[]>([]);
   readonly editing = signal(false);
   readonly busy = signal(false);
   readonly error = signal<string | null>(null);
@@ -65,7 +65,7 @@ export class GradesPage implements OnInit {
 
   ngOnInit(): void {
     this.reload();
-    this.api.listRules().subscribe({ next: (r) => this.rules.set(r) });
+    this.api.listRuleDetails().subscribe({ next: (r) => this.rules.set(r) });
   }
 
   startNew(): void {

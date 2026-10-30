@@ -15,8 +15,11 @@ export interface GradeDto {
   ruleIds: number[];
 }
 
-export interface RuleDto {
+/** Flat rule detail (leaf) used by sentences, grades, filters, grid dropdowns. */
+export interface RuleDetailDto {
   id: number;
+  ruleId: number;
+  ruleNameEn: string;
   nameEn: string;
   nameUr: string | null;
   explanationEn: string | null;
@@ -24,6 +27,26 @@ export interface RuleDto {
   code: string | null;
   isActive: boolean;
   gradeIds: number[];
+}
+
+export interface RuleDetailSummaryDto {
+  id: number;
+  nameEn: string;
+  nameUr: string | null;
+  code: string | null;
+  sortOrder: number;
+  isActive: boolean;
+}
+
+/** Master rule with nested details. */
+export interface RuleDto {
+  id: number;
+  nameEn: string;
+  nameUr: string | null;
+  code: string | null;
+  sortOrder: number;
+  isActive: boolean;
+  details: RuleDetailSummaryDto[];
 }
 
 export interface SentenceDto {
@@ -84,16 +107,47 @@ export class ContentService {
     return this.http.put<GradeDto>(`${base()}/grades/${id}/rules`, { ruleIds });
   }
 
+  /** Flat rule details for sentence/grade/filter multi-selects. */
+  listRuleDetails(activeOnly = false): Observable<RuleDetailDto[]> {
+    let params = new HttpParams();
+    if (activeOnly) params = params.set('activeOnly', 'true');
+    return this.http.get<RuleDetailDto[]>(`${base()}/rule-details`, { params });
+  }
+
+  /** Master rules with nested details (admin page). */
   listRules(activeOnly = false): Observable<RuleDto[]> {
     let params = new HttpParams();
     if (activeOnly) params = params.set('activeOnly', 'true');
     return this.http.get<RuleDto[]>(`${base()}/rules`, { params });
   }
 
-  saveRule(body: Partial<RuleDto> & { nameEn: string; isActive: boolean }, id?: number): Observable<RuleDto> {
+  saveRule(
+    body: {
+      nameEn: string;
+      nameUr?: string | null;
+      code?: string | null;
+      sortOrder: number;
+      isActive: boolean;
+      details?: {
+        id?: number | null;
+        nameEn: string;
+        nameUr?: string | null;
+        explanationEn?: string | null;
+        explanationUr?: string | null;
+        code?: string | null;
+        sortOrder: number;
+        isActive: boolean;
+      }[];
+    },
+    id?: number
+  ): Observable<RuleDto> {
     return id
       ? this.http.put<RuleDto>(`${base()}/rules/${id}`, body)
       : this.http.post<RuleDto>(`${base()}/rules`, body);
+  }
+
+  deactivateRule(id: number): Observable<void> {
+    return this.http.delete<void>(`${base()}/rules/${id}`);
   }
 
   listSentences(filters: { gradeId?: number; status?: number; difficulty?: number; ruleId?: number } = {}): Observable<SentenceDto[]> {

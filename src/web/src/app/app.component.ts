@@ -1,5 +1,5 @@
 import { Component, OnInit, computed } from '@angular/core';
-import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { AuthService } from './services/auth.service';
 
 @Component({
@@ -14,7 +14,7 @@ export class AppComponent implements OnInit {
     return roles.includes('Admin') || roles.includes('Teacher');
   });
 
-  constructor(readonly auth: AuthService) {}
+  constructor(readonly auth: AuthService, private readonly router: Router) {}
 
   ngOnInit(): void {
     if (this.auth.token() && !this.auth.user()) {
@@ -24,5 +24,7 @@ export class AppComponent implements OnInit {
 
   logout(): void {
     this.auth.logout();
+    sessionStorage.removeItem('enur_practice_session');
+    this.router.navigateByUrl('/login');
   }
 }
